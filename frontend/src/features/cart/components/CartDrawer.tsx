@@ -6,6 +6,7 @@ interface CartDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCheckout: () => void
+  onSaveAsBasket?: () => void
   prunedNames?: string[]
   onDismissPruned?: () => void
 }
@@ -14,6 +15,7 @@ export function CartDrawer({
   open,
   onOpenChange,
   onCheckout,
+  onSaveAsBasket,
   prunedNames,
   onDismissPruned,
 }: CartDrawerProps) {
@@ -27,6 +29,7 @@ export function CartDrawer({
         </SheetHeader>
         <CartContents
           onCheckout={onCheckout}
+          onSaveAsBasket={onSaveAsBasket}
           prunedNames={prunedNames}
           onDismissPruned={onDismissPruned}
           compactListClassName="max-h-64"

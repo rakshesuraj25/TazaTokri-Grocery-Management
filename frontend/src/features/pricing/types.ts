@@ -19,6 +19,12 @@ export interface SetPriceRequest {
   note?: string
 }
 
+export interface MarkdownPriceRequest {
+  /** > 0 and < currentPrice, up to 2 decimal places */
+  markdownPricePerUnit: string
+  reason?: string
+}
+
 export interface PriceSuggestion {
   vegetableId: number | string
   nameEn: string

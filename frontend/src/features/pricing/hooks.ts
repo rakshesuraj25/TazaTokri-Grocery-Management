@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { catalogKeys } from '@/features/catalog/hooks'
 import { pricingApi } from './api'
-import type { SetPriceRequest } from './types'
+import type { MarkdownPriceRequest, SetPriceRequest } from './types'
 
 export const pricingKeys = {
   all: ['pricing'] as const,
@@ -52,6 +52,18 @@ export function useApplyPriceSuggestion() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (vegId: number | string) => pricingApi.applySuggestion(vegId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: pricingKeys.all })
+      void qc.invalidateQueries({ queryKey: catalogKeys.all })
+    },
+  })
+}
+
+export function useApplyMarkdownPrice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ vegId, body }: { vegId: number | string; body: MarkdownPriceRequest }) =>
+      pricingApi.applyMarkdown(vegId, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: pricingKeys.all })
       void qc.invalidateQueries({ queryKey: catalogKeys.all })

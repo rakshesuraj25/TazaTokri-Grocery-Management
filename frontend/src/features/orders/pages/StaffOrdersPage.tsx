@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, X } from 'lucide-react'
+import { Search, Truck, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { useStaffCatalog } from '@/features/catalog/hooks'
+import { StaffDeliveryBoardPanel } from '@/features/delivery/components/StaffDeliveryBoardPanel'
 import { todayIST } from '@/lib/dates'
 import { toApiError } from '@/lib/api'
 import { useConfirmOrder, useStaffOrders } from '../hooks'
@@ -33,6 +34,7 @@ export default function StaffOrdersPage() {
   const [date, setDate] = useState<string>(() => todayIST())
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'ALL'>('ALL')
   const [search, setSearch] = useState('')
+  const [showDispatchBoard, setShowDispatchBoard] = useState(false)
 
   const catalog = useStaffCatalog()
   const allDateOrders = useStaffOrders({ date: date || undefined })
@@ -86,7 +88,19 @@ export default function StaffOrdersPage() {
           { label: t('staff.orders.title') },
         ]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={showDispatchBoard ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowDispatchBoard((v) => !v)}
+              className="rounded-full"
+            >
+              <Truck className="size-4" aria-hidden />
+              {t('delivery.dispatchBoardBtn', {
+                defaultValue: 'Delivery Dispatch Board',
+              })}
+            </Button>
             <Input
               type="date"
               value={date}
@@ -102,6 +116,20 @@ export default function StaffOrdersPage() {
           </div>
         }
       />
+
+      {showDispatchBoard && (
+        <StaffDeliveryBoardPanel
+          date={date || undefined}
+          onRequestAssign={(orderId) => {
+            const match = (allDateOrders.data ?? []).find(
+              (o) => String(o.id) === String(orderId),
+            )
+            if (match) {
+              setAssignTarget(match)
+            }
+          }}
+        />
+      )}
 
       <div className="relative">
         <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />

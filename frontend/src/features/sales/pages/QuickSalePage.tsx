@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FilePlus2, History, Receipt, RotateCcw, ShoppingBag } from 'lucide-react'
+import { FilePlus2, History, Receipt, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -14,11 +15,13 @@ import { QuickSaleBill } from '../components/QuickSaleBill'
 import { ExactWeightKeypad } from '../components/ExactWeightKeypad'
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog'
 import { RecentSalesTab } from '../components/RecentSalesTab'
+import { AiQuickSaleAssistantDialog } from '../components/AiQuickSaleAssistantDialog'
 
 export default function QuickSalePage() {
   const { t } = useTranslation()
   const { name } = useVegetableName()
   const ctrl = useQuickSaleController()
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 pb-28 lg:pb-6">
@@ -27,6 +30,16 @@ export default function QuickSalePage() {
           title={t('staff.sale.title')}
           actions={
             <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAiDialogOpen(true)}
+                className="rounded-full"
+              >
+                <Sparkles className="text-primary size-4" aria-hidden />
+                {t('ai.quickSaleListBtn', { defaultValue: 'Scan / Paste List (AI)' })}
+              </Button>
               {ctrl.syncedLines.length > 0 && (
                 <Button type="button" variant="outline" size="sm" onClick={ctrl.handleClear} className="rounded-full">
                   <FilePlus2 className="size-4" />
@@ -184,6 +197,17 @@ export default function QuickSalePage() {
       />
 
       <SaleReceiptDialog sale={ctrl.completedSale} onClose={() => ctrl.setCompletedSale(null)} />
+
+      <AiQuickSaleAssistantDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        catalog={ctrl.catalog.data ?? []}
+        onLoadIntoBill={(items) => {
+          for (const entry of items) {
+            ctrl.handleAddQty(entry.item, entry.quantity)
+          }
+        }}
+      />
     </div>
   )
 }

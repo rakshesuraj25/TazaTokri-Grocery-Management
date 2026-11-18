@@ -41,6 +41,8 @@ import { NeedsAttentionCard } from '../components/NeedsAttentionCard'
 import { DashboardOperationalCards } from '../components/DashboardOperationalCards'
 import { DashboardRecentActivity } from '../components/DashboardRecentActivity'
 import { DashboardCharts } from '../components/DashboardCharts'
+import { BusinessIntelligencePanel } from '../components/BusinessIntelligencePanel'
+import { OperationalHealthCard } from '../components/OperationalHealthCard'
 
 export default function DashboardPage() {
   const { t } = useTranslation()
@@ -269,6 +271,9 @@ export default function DashboardPage() {
       {/* Charts right in core view for immediate visual telemetry */}
       <DashboardCharts report={r} catalogById={catalogById} />
 
+      {/* Phase 3: Inventory Intelligence, Stock Movements, Profitability & Freshness Batches */}
+      <BusinessIntelligencePanel />
+
       <DashboardRecentActivity
         orders={staffOrders.data ?? []}
         purchases={recentPurchases.data ?? []}
@@ -284,8 +289,9 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <NeedsAttentionCard items={attentionItems} />
-        <div className="no-print">
+        <div className="no-print space-y-4">
           <LaunchChecklist />
+          <OperationalHealthCard />
         </div>
       </div>
 

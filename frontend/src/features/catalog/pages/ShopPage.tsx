@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Search, ShoppingBag, Sprout } from 'lucide-react'
+import { Plus, Search, ShoppingBag, Sprout } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -13,6 +14,10 @@ import { pruneCartWithCatalog } from '@/features/cart/pruneCart'
 import { CartContents } from '@/features/cart/components/CartContents'
 import { CartDrawer } from '@/features/cart/components/CartDrawer'
 import { useAuthStore } from '@/features/auth/store'
+import { usePublicCombos } from '@/features/combos/hooks'
+import { ShopCombosSection } from '@/features/combos/components/ShopCombosSection'
+import { SaveCurrentBasketDialog } from '@/features/baskets/components/SaveCurrentBasketDialog'
+import { SavedBasketsSection } from '@/features/baskets/components/SavedBasketsSection'
 import { useCustomerOrders } from '@/features/orders/hooks'
 import { buildUsualVegetables } from '@/features/orders/orderAgain'
 import { useVegetableName } from '@/hooks/useVegetableName'
@@ -21,7 +26,8 @@ import { addMoney, mulMoney, sumMoney } from '@/lib/money'
 import { usePublicVegetables } from '../hooks'
 import { useFavouritesStore } from '../favouritesStore'
 import {
-  matchesVegetableSearch,
+  filterVegetablesBySearch,
+  sortPublicOptions,
   sortPublicVegetables,
   type ShopSortOption,
 } from '../shopHelpers'
@@ -38,8 +44,11 @@ export default function ShopPage() {
   const user = useAuthStore((s) => s.user)
 
   const catalog = usePublicVegetables()
+  const publicCombos = usePublicCombos()
   const pastOrders = useCustomerOrders(0, Boolean(user))
   const items = useCartStore((s) => s.items)
+  const combos = useCartStore((s) => s.combos)
+  const addItem = useCartStore((s) => s.addItem)
   const replaceItems = useCartStore((s) => s.replaceItems)
   const favouriteIds = useFavouritesStore((s) => s.ids)
 
@@ -48,6 +57,7 @@ export default function ShopPage() {
   const [category, setCategory] = useState<string>('ALL')
   const [inStockOnly, setInStockOnly] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
+  const [saveBasketOpen, setSaveBasketOpen] = useState(false)
   const [prunedNames, setPrunedNames] = useState<string[]>([])
 
   // Prune cart lines missing/out-of-stock/unpriced once live catalog loads, preserving clientRef
@@ -73,23 +83,35 @@ export default function ShopPage() {
   )
 
   const filtered = useMemo(() => {
-    const matches = (catalog.data ?? []).filter((v) => {
+    const byCategoryAndStock = (catalog.data ?? []).filter((v) => {
       if (inStockOnly && !v.inStock) return false
       if (category === 'FAVOURITES' && !favouriteIds.includes(String(v.id))) return false
       if (category !== 'ALL' && category !== 'FAVOURITES' && v.category !== category) return false
-      return matchesVegetableSearch(v, search)
+      return true
     })
+    const matches = filterVegetablesBySearch(byCategoryAndStock, search)
     return sortPublicVegetables(matches, sortBy, (veg) => name(veg))
   }, [catalog.data, category, favouriteIds, inStockOnly, name, search, sortBy])
 
-  const subtotal = useMemo(
+  const itemsSubtotal = useMemo(
     () => sumMoney(items.map((i) => mulMoney(i.pricePerUnit, i.count))),
     [items],
+  )
+  const combosSubtotal = useMemo(
+    () => sumMoney(combos.map((c) => mulMoney(c.sellingPrice, c.count))),
+    [combos],
+  )
+  const subtotal = useMemo(
+    () => addMoney(itemsSubtotal, combosSubtotal),
+    [itemsSubtotal, combosSubtotal],
   )
   const estimatedTotal = useMemo(
     () => addMoney(subtotal, estimateDeliveryFee(subtotal)),
     [subtotal],
   )
+  const totalCartLines =
+    items.reduce((acc, i) => acc + i.count, 0) +
+    combos.reduce((acc, c) => acc + c.count, 0)
   const hasCatalogData = (catalog.data ?? []).length > 0
 
   const handleCheckout = () => {
@@ -97,11 +119,62 @@ export default function ShopPage() {
     navigate(user ? '/shop/checkout' : '/login?next=%2Fshop%2Fcheckout')
   }
 
+  const handleOpenSaveBasket = () => {
+    setCartOpen(false)
+    if (!user) {
+      navigate('/login?next=%2Fshop')
+      return
+    }
+    setSaveBasketOpen(true)
+  }
+
+  const handleAddAllUsuals = () => {
+    let added = 0
+    for (const veg of usualVegetables) {
+      if (!veg.inStock) continue
+      const sorted = sortPublicOptions(veg.options)
+      const defOpt = sorted.find((o) => o.defaultOption) ?? sorted[0]
+      if (!defOpt || defOpt.price === null || defOpt.price === undefined) continue
+      addItem({
+        vegetableId: String(veg.id),
+        unitId: String(defOpt.unitId),
+        count: 1,
+        nameEn: veg.nameEn,
+        nameMr: veg.nameMr ?? undefined,
+        nameHi: veg.nameHi ?? undefined,
+        unitLabel: defOpt.label,
+        pricePerUnit: String(defOpt.price),
+        quantityInBaseUnit: String(defOpt.quantityInBaseUnit),
+        availableStock:
+          veg.availableStock !== undefined && veg.availableStock !== null
+            ? String(veg.availableStock)
+            : undefined,
+      })
+      added += 1
+    }
+    if (added > 0) {
+      toast.success(
+        t('orders.orderAgainAdded', { defaultValue: 'Added items to your cart' }),
+      )
+    }
+  }
+
   return (
     <div className="space-y-4 p-4 pb-28 lg:pb-8">
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_350px] lg:items-start lg:gap-6">
         <div className="min-w-0 space-y-5">
           <ShopHero featuredVegetables={catalog.data ?? []} />
+
+          {Boolean(user) && category === 'ALL' && !search.trim() && (
+            <SavedBasketsSection compact />
+          )}
+
+          {category === 'ALL' && !search.trim() && (publicCombos.data ?? []).length > 0 && (
+            <ShopCombosSection
+              combos={publicCombos.data ?? []}
+              usualVegetables={usualVegetables}
+            />
+          )}
 
           <ShopFeaturedCategories
             categories={categories}
@@ -124,11 +197,23 @@ export default function ShopPage() {
           />
 
           {usualVegetables.length > 0 && category === 'ALL' && !search.trim() && (
-            <section className="space-y-3">
-              <SectionHeader
-                title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
-                count={usualVegetables.length}
-              />
+            <section className="space-y-3" data-testid="shop-your-usual-section">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <SectionHeader
+                  title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
+                  count={usualVegetables.length}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddAllUsuals}
+                  className="rounded-full"
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  {t('shop.addAllUsuals', { defaultValue: 'Add all usuals' })}
+                </Button>
+              </div>
               <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-4">
                 {usualVegetables.map((veg) => (
                   <VegetableCard key={`usual-${veg.id}`} vegetable={veg} />
@@ -179,14 +264,15 @@ export default function ShopPage() {
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-organic text-lg font-bold">{t('cart.title')}</h2>
-              {items.length > 0 && (
+              {totalCartLines > 0 && (
                 <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-0.5 text-xs font-bold">
-                  {items.reduce((acc, i) => acc + i.count, 0)}
+                  {totalCartLines}
                 </span>
               )}
             </div>
             <CartContents
               onCheckout={handleCheckout}
+              onSaveAsBasket={handleOpenSaveBasket}
               prunedNames={prunedNames}
               onDismissPruned={() => setPrunedNames([])}
               compactListClassName="max-h-80"
@@ -196,7 +282,7 @@ export default function ShopPage() {
       </div>
 
       {/* Mobile sticky cart summary bar */}
-      {(items.length > 0 || prunedNames.length > 0) && (
+      {(totalCartLines > 0 || prunedNames.length > 0) && (
         <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-xl px-4 lg:hidden">
           <Button
             size="xl"
@@ -205,7 +291,7 @@ export default function ShopPage() {
           >
             <span className="inline-flex items-center gap-2">
               <ShoppingBag className="size-5" aria-hidden />
-              {t('shop.viewCart')} ({items.reduce((a, b) => a + b.count, 0)})
+              {t('shop.viewCart')} ({totalCartLines})
             </span>
             <EstimatedAmount
               value={subtotal.gt(0) ? estimatedTotal.toFixed(2) : '0.00'}
@@ -219,8 +305,15 @@ export default function ShopPage() {
         open={cartOpen}
         onOpenChange={setCartOpen}
         onCheckout={handleCheckout}
+        onSaveAsBasket={handleOpenSaveBasket}
         prunedNames={prunedNames}
         onDismissPruned={() => setPrunedNames([])}
+      />
+
+      <SaveCurrentBasketDialog
+        open={saveBasketOpen}
+        items={items}
+        onClose={() => setSaveBasketOpen(false)}
       />
     </div>
   )

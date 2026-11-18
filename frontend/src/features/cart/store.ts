@@ -12,6 +12,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
       items: [],
+      combos: [],
       clientRef: createClientRef(),
 
       addItem: (item) =>
@@ -55,8 +56,52 @@ export const useCartStore = create<CartState>()(
       replaceItems: (items) =>
         set({ items }),
 
+      addCombo: (combo) =>
+        set((state) => {
+          const maxCap =
+            combo.maxAvailableCombos && combo.maxAvailableCombos > 0
+              ? Math.min(combo.maxAvailableCombos, 10)
+              : 10
+          const existing = state.combos.find((c) => c.comboId === combo.comboId)
+          if (existing) {
+            return {
+              combos: state.combos.map((c) =>
+                c.comboId === combo.comboId
+                  ? { ...c, count: Math.min(c.count + combo.count, maxCap) }
+                  : c,
+              ),
+            }
+          }
+          return {
+            combos: [...state.combos, { ...combo, count: Math.min(combo.count, maxCap) }],
+          }
+        }),
+
+      updateComboCount: (comboId, count) =>
+        set((state) => ({
+          combos:
+            count <= 0
+              ? state.combos.filter((c) => c.comboId !== comboId)
+              : state.combos.map((c) => {
+                  if (c.comboId !== comboId) return c
+                  const maxCap =
+                    c.maxAvailableCombos && c.maxAvailableCombos > 0
+                      ? Math.min(c.maxAvailableCombos, 10)
+                      : 10
+                  return { ...c, count: Math.min(count, maxCap) }
+                }),
+        })),
+
+      removeCombo: (comboId) =>
+        set((state) => ({
+          combos: state.combos.filter((c) => c.comboId !== comboId),
+        })),
+
+      replaceCombos: (combos) =>
+        set({ combos }),
+
       clearCart: () =>
-        set({ items: [], clientRef: createClientRef() }),
+        set({ items: [], combos: [], clientRef: createClientRef() }),
 
       resetClientRef: () =>
         set({ clientRef: createClientRef() }),

@@ -56,6 +56,8 @@ export function formatMoney(value: Decimalish | null | undefined): string {
   return inr.format(rounded.toNumber())
 }
 
+export const formatInr = formatMoney
+
 /** Format a quantity to at most 3 dp, trimming trailing zeros ("1.500" -> "1.5"). */
 export function formatQty(value: Decimalish | null | undefined, decimals = 3): string {
   return dec(value).toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP).toFixed()

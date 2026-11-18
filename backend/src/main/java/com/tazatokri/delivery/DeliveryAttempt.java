@@ -28,7 +28,7 @@ public class DeliveryAttempt {
     private Long assignedBy;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     private DeliveryStatus status = DeliveryStatus.ASSIGNED;
 
     @Column(nullable = false, updatable = false)
@@ -40,4 +40,22 @@ public class DeliveryAttempt {
 
     @Column(length = 255)
     private String failureReason;
+
+    @Column(name = "otp_verified", nullable = false)
+    private boolean otpVerified = false;
+
+    @Column(name = "otp_verified_at")
+    private LocalDateTime otpVerifiedAt;
+
+    @Column(name = "otp_verified_by")
+    private Long otpVerifiedBy;
+
+    @Column(name = "otp_verification_method", length = 30)
+    private String otpVerificationMethod;
+
+    @Column(name = "otp_override_reason", length = 255)
+    private String otpOverrideReason;
+
+    @Column(name = "delivery_note", length = 255)
+    private String deliveryNote;
 }

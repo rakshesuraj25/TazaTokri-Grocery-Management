@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { EstimatedAmount, MoneyDisplay } from '@/components/MoneyDisplay'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
-import type { CartItem } from '@/features/cart/types'
+import type { CartComboItem, CartItem } from '@/features/cart/types'
 import type { CustomerAddress } from '@/features/users/types'
 import {
   FREE_DELIVERY_THRESHOLD,
@@ -195,6 +195,7 @@ export function CheckoutPaymentStep({
 export function CheckoutSummaryCard({
   activeStep,
   items,
+  combos = [],
   subtotal,
   deliveryFee,
   estimatedTotal,
@@ -204,6 +205,7 @@ export function CheckoutSummaryCard({
 }: {
   activeStep: boolean
   items: CartItem[]
+  combos?: CartComboItem[]
   subtotal: Decimal
   deliveryFee: Decimal
   estimatedTotal: Decimal
@@ -246,6 +248,20 @@ export function CheckoutSummaryCard({
       )}
 
       <ul className="divide-border divide-y text-sm">
+        {combos.map((c) => (
+          <li
+            key={`combo-${c.comboId}`}
+            className="flex items-center justify-between gap-2.5 py-2"
+          >
+            <div className="min-w-0">
+              <p className="font-semibold truncate">
+                {name(c)} × {c.count}
+              </p>
+              <p className="text-muted-foreground truncate text-xs">{c.contentsSummary}</p>
+            </div>
+            <MoneyDisplay value={mulMoney(c.sellingPrice, c.count).toFixed(2)} />
+          </li>
+        ))}
         {items.map((i) => (
           <li
             key={`${i.vegetableId}-${i.unitId}`}

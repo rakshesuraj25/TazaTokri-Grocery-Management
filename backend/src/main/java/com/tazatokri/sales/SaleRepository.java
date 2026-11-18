@@ -18,6 +18,7 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
 	@EntityGraph(attributePaths = { "items", "items.vegetable" })
 	Optional<Sale> findWithDetailsByClientRef(String clientRef);
 
+	@EntityGraph(attributePaths = { "items", "items.vegetable" })
 	List<Sale> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByIdDesc(LocalDateTime from, LocalDateTime to);
 	
     interface PaymentSummary {

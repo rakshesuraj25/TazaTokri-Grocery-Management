@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, ShoppingBasket } from 'lucide-react'
@@ -26,6 +26,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
 
   const items = useCartStore((s) => s.items)
+  const combos = useCartStore((s) => s.combos)
   const clientRef = useCartStore((s) => s.clientRef)
   const clearCart = useCartStore((s) => s.clearCart)
 
@@ -38,6 +39,7 @@ export default function CheckoutPage() {
   const [onlineDisabled, setOnlineDisabled] = useState(false)
   const [addAddrOpen, setAddAddrOpen] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     if (!selectedAddressId && (addresses.data ?? []).length > 0) {
@@ -46,11 +48,13 @@ export default function CheckoutPage() {
     }
   }, [addresses.data, selectedAddressId])
 
-  const subtotal = sumMoney(items.map((i) => mulMoney(i.pricePerUnit, i.count)))
+  const itemsSubtotal = sumMoney(items.map((i) => mulMoney(i.pricePerUnit, i.count)))
+  const combosSubtotal = sumMoney(combos.map((c) => mulMoney(c.sellingPrice, c.count)))
+  const subtotal = addMoney(itemsSubtotal, combosSubtotal)
   const deliveryFee = estimateDeliveryFee(subtotal)
   const estimatedTotal = addMoney(subtotal, deliveryFee)
 
-  if (items.length === 0) {
+  if (items.length === 0 && combos.length === 0) {
     return (
       <div className="p-4">
         <EmptyState
@@ -65,7 +69,8 @@ export default function CheckoutPage() {
   }
 
   const handlePlaceOrder = () => {
-    if (!selectedAddressId) return
+    if (!selectedAddressId || placeOrder.isPending || submittingRef.current) return
+    submittingRef.current = true
     setServerError(null)
 
     placeOrder.mutate(
@@ -78,14 +83,24 @@ export default function CheckoutPage() {
           unitId: i.unitId,
           count: i.count,
         })),
+        ...(combos.length > 0
+          ? {
+              combos: combos.map((c) => ({
+                comboId: Number(c.comboId),
+                count: c.count,
+              })),
+            }
+          : {}),
       },
       {
         onSuccess: (order) => {
+          submittingRef.current = false
           clearCart()
           toast.success(t('orders.status.PLACED'))
           navigate(`/shop/orders/${order.id}`, { replace: true })
         },
         onError: (err) => {
+          submittingRef.current = false
           const apiErr = toApiError(err)
           if (
             apiErr.status === 400 &&
@@ -156,6 +171,7 @@ export default function CheckoutPage() {
         <CheckoutSummaryCard
           activeStep={step === 3}
           items={items}
+          combos={combos}
           subtotal={subtotal}
           deliveryFee={deliveryFee}
           estimatedTotal={estimatedTotal}

@@ -11,13 +11,18 @@ import { StockMeter } from '@/components/StockMeter'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
 import type { StaffCatalogItem } from '@/features/catalog/types'
-import { getLowStockThreshold, isLowStock } from '@/lib/businessRules'
+import {
+  getLowStockThreshold,
+  isLowStock,
+  type LowStockThresholds,
+} from '@/lib/businessRules'
 import { dec, formatQty } from '@/lib/money'
 
 interface StockListViewProps {
   items: StaffCatalogItem[]
   view: 'cards' | 'table'
   isOwner: boolean
+  thresholds?: Partial<LowStockThresholds>
   onToggleAvail: (id: string | number, value: boolean) => void
   onWastage: (item: StaffCatalogItem) => void
   onAdjust: (item: StaffCatalogItem) => void
@@ -28,6 +33,7 @@ export function StockListView({
   items,
   view,
   isOwner,
+  thresholds,
   onToggleAvail,
   onWastage,
   onAdjust,
@@ -51,10 +57,23 @@ export function StockListView({
           <tbody className="divide-y">
             {items.map((item) => {
               const unitLabel = t(`units.${item.baseUnit}`, { defaultValue: item.baseUnit })
+              const isOut = dec(item.stock).lte(0)
+              const isLow = isLowStock(item.stock, item.baseUnit, thresholds)
+              const thresholdVal = getLowStockThreshold(item.baseUnit, thresholds)
+
               return (
-                <tr key={String(item.id)}>
+                <tr
+                  key={String(item.id)}
+                  className={
+                    isOut
+                      ? 'bg-destructive/[0.04]'
+                      : isLow
+                        ? 'bg-turmeric-light/20'
+                        : ''
+                  }
+                >
                   <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <VegetableImage
                         nameEn={item.nameEn}
                         imageUrl={item.imageUrl}
@@ -63,13 +82,18 @@ export function StockListView({
                         size="xs"
                       />
                       <span className="font-semibold">{name(item)}</span>
+                      {isOut ? (
+                        <StatusBadge kind="stock" status="OUT_OF_STOCK" />
+                      ) : isLow ? (
+                        <StatusBadge kind="stock" status="LOW_STOCK" />
+                      ) : null}
                     </div>
                   </td>
                   <td className="min-w-36 px-3 py-2.5">
                     <StockMeter
                       quantity={item.stock}
                       unitLabel={unitLabel}
-                      lowThreshold={getLowStockThreshold(item.baseUnit)}
+                      lowThreshold={thresholdVal}
                     />
                   </td>
                   <td className="px-3 py-2.5">
@@ -108,7 +132,8 @@ export function StockListView({
       {items.map((item) => {
         const unitLabel = t(`units.${item.baseUnit}`, { defaultValue: item.baseUnit })
         const isOut = dec(item.stock).lte(0)
-        const isLow = isLowStock(item.stock, item.baseUnit)
+        const isLow = isLowStock(item.stock, item.baseUnit, thresholds)
+        const thresholdVal = getLowStockThreshold(item.baseUnit, thresholds)
 
         return (
           <Card
@@ -153,7 +178,7 @@ export function StockListView({
                   <StockMeter
                     quantity={item.stock}
                     unitLabel={unitLabel}
-                    lowThreshold={getLowStockThreshold(item.baseUnit)}
+                    lowThreshold={thresholdVal}
                   />
                   {item.pricePerUnit !== null ? (
                     <p className="text-muted-foreground text-xs">

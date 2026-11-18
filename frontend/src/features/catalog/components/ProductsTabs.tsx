@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { BookOpen, ImageIcon, Tag, Warehouse } from 'lucide-react'
+import { BookOpen, ImageIcon, Package, Tag, Warehouse } from 'lucide-react'
 import { useAuthStore } from '@/features/auth/store'
 
 export function ProductsTabs() {
@@ -35,6 +35,12 @@ export function ProductsTabs() {
       end: false,
       icon: <Warehouse className="size-4" aria-hidden />,
       label: t('staff.products.tabStock', { defaultValue: 'Stock' }),
+    },
+    {
+      to: '/staff/combos',
+      end: false,
+      icon: <Package className="size-4" aria-hidden />,
+      label: t('combos.staffTitle', { defaultValue: 'Combo Packs' }),
     },
   ]
 

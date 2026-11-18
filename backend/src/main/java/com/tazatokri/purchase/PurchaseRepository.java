@@ -16,7 +16,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     @EntityGraph(attributePaths = {"supplier", "items", "items.vegetable"})
     Optional<Purchase> findWithDetailsById(Long id);
 
-    @EntityGraph(attributePaths = "supplier")
+    @EntityGraph(attributePaths = {"supplier", "items", "items.vegetable"})
     Page<Purchase> findAllByOrderByPurchaseDateDescIdDesc(Pageable pageable);
 
     @Query("select coalesce(sum(p.totalCost), 0) from Purchase p where p.purchaseDate = :date")

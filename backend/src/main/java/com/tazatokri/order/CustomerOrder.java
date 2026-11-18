@@ -46,6 +46,9 @@ public class CustomerOrder {
     @Column(nullable = false, length = 6)
     private String deliveryPincode;
 
+    @Column(name = "delivery_instructions", length = 255)
+    private String deliveryInstructions;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal subtotal;          // estimated items total
 

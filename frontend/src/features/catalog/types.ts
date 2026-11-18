@@ -18,6 +18,7 @@ export interface PublicVegetable {
   baseUnit: BaseUnit
   pricePerUnit: string | number | null
   inStock: boolean
+  availableStock?: string | number | null
   options: PublicUnitOption[]
 }
 

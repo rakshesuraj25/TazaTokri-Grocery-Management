@@ -49,7 +49,12 @@ public class InventoryController {
     public record WastageRequest(
             @NotNull Long vegetableId,
             @NotNull @DecimalMin("0.001") @Digits(integer = 9, fraction = 3) BigDecimal quantity,
-            @Size(max = 255) String note) {}
+            @Size(max = 40) String reason,
+            @Size(max = 255) String note) {
+        public WastageRequest(Long vegetableId, BigDecimal quantity, String note) {
+            this(vegetableId, quantity, null, note);
+        }
+    }
 
     public record AdjustmentRequest(
             @NotNull Long vegetableId,
@@ -73,8 +78,25 @@ public class InventoryController {
     @PreAuthorize("hasAnyRole('OWNER','STAFF')")
     @ResponseStatus(HttpStatus.CREATED)
     public MovementResponse wastage(@Valid @RequestBody WastageRequest req, Authentication auth) {
+        String formattedNote = formatWastageNote(req.reason(), req.note());
         return MovementResponse.from(service.record(req.vegetableId(), MovementType.WASTAGE,
-                req.quantity(), req.note(), null, null, auth.getName()));
+                req.quantity(), formattedNote, null, null, auth.getName()));
+    }
+
+    static String formatWastageNote(String reason, String note) {
+        String r = reason == null ? "" : reason.trim();
+        String n = note == null ? "" : note.trim();
+        if (!r.isEmpty() && !n.isEmpty()) {
+            if (n.toLowerCase().startsWith(r.toLowerCase())) {
+                return n.length() > 255 ? n.substring(0, 255) : n;
+            }
+            String combined = r + ": " + n;
+            return combined.length() > 255 ? combined.substring(0, 255) : combined;
+        }
+        if (!r.isEmpty()) {
+            return r;
+        }
+        return n.isEmpty() ? "Spoiled" : n;
     }
 
     @PostMapping("/adjustments")

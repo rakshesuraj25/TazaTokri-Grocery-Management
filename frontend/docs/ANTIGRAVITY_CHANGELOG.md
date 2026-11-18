@@ -1,6 +1,28 @@
-# TazaTokri Frontend Changelog
+# TazaTokri Full-Stack Changelog
 
-All changes strictly **frontend-only** (`tazatokri-backend/` untouched, zero SQL run, zero seed calls).
+---
+
+## Phase 4: Production Readiness & Delivery Management
+- **Delivery Dispatch, Grouping & Mobile Driver Flow (`DeliveryService.java`, `DeliveryAdminController.java`, `StaffDeliveryBoardPanel.tsx`, `DeliveryOrdersPage.tsx`):** Added staff delivery dispatch board (`GET /api/delivery/admin/board`) with date/stage/PIN/assignee filters, PIN/locality/person grouping, assignment & reassignment, `RETURNED_TO_STORE` handling, customer delivery instructions & map pin fields (`V4__phase4_delivery_otp_pod_and_ops.sql`), and audit trail (`delivery_audit_logs`).
+- **Delivery OTP Verification & Audited Manual Exceptions (`DeliveryOtp.java`, `DeliveryController.java`, `DeliveryModals.tsx`):** Added backend `SecureRandom` 6-digit OTP generation with BCrypt hashing, expiry, max-attempt brute-force lock, reuse/cancelled-order protection, optional WhatsApp Cloud API delivery, and audited manual override (`>= 10` char reason).
+- **Proof of Delivery Photo Storage (`ProofStorageProvider.java`, `DeliveryEvidence.java`):** Added magic-byte-validated JPEG/PNG/WebP uploads (`<= 5 MB`), UUID storage keys, local private storage (`LOCAL`) / optional `S3_R2` config, and ownership-checked photo retrieval (`GET /api/orders/{id}/delivery-evidence/{evidenceId}/photo`).
+- **Observability, Backup/Restore, E2E & CI/CD (`OperationalHealthController.java`, `CorrelationIdFilter.java`, `LogScrubber.java`, `SentryErrorReporter.java`, `src/lib/sentry.ts`, `scripts/backup-mysql.*`, `scripts/restore-mysql-test.*`, `.github/workflows/ci.yml`, `Dockerfiles`):** Added Actuator health probes, restricted `/api/ops/health` dashboard card, scrubbed Sentry error capture, automated MySQL backup & isolated restore verification scripts, expanded Playwright E2E flows, and hardened non-root Docker builds.
+
+---
+
+## Phase 3: Shop Operations & Business Intelligence
+- **Advanced Thermal Receipt Printing (`src/features/sales/receiptSettings.ts`, `SaleReceiptDialog.tsx`, `CustomerOrderReceiptDialog.tsx`, `src/styles/globals.css`):** Added configurable `58mm`, `80mm`, and `A4` receipt formats with persisted store header/address/phone/footer settings, `@media print` thermal layout constraints, and strict distinction between Customer Order Confirmation Slips (`DUE ON DELIVERY`) and Completed Payment Receipts (`PAID`).
+- **Inventory Intelligence, Stock Movements & Profitability (`GET /api/reports/intelligence`, `BusinessIntelligenceReport.java`, `BusinessIntelligencePanel.tsx`):** Added inventory valuation at actual weighted-average purchase landed cost (never using selling price as fallback), stock movement ledger (`Opening`, `+Purchases`, `-Online Orders`, `-Quick Sales`, `-Wastage`, `±Adjustments`, `Closing`), Counter vs Online sales split, payment method breakdown, and estimated gross profit, gross margin %, wastage cost, and net contribution with `Today`, `Last 7 days`, `Last 30 days`, and `Custom` date filters on the Dashboard and Stock pages.
+- **Freshness Batches & Staff Markdown Pricing (`POST /api/pricing/vegetables/{id}/markdown`, `MarkdownPriceDialog.tsx`):** Added FIFO purchase batch freshness tracking (`PUR-#`, supplier, days since purchase in IST, estimated remaining batch stock, landed cost vs selling price) and staff-controlled clearance markdown pricing (blocking zero-stock and spoiled items).
+- **Gemini AI Draft Assistants (`com.tazatokri.ai`, `V3__phase3_operations_and_intelligence.sql`, `InvoiceScannerCard.tsx`, `AiQuickSaleAssistantDialog.tsx`):** Added backend-only Gemini AI integration (`GEMINI_ENABLED`, `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-4-hydrogen`) + deterministic multilingual text parsers for Purchase Invoice scanning (`POST /api/ai/purchase-invoice/extract`) and Quick Sale customer list parsing (`POST /api/ai/quick-sale/extract`), enforcing strict draft-only review boundaries before any purchase or sale is saved.
+
+---
+
+## Phase 2: Customer Retention & Sales Growth
+- **WhatsApp Customer Communication (`com.tazatokri.notification`, `src/features/notifications/`):** Added explicit customer WhatsApp opt-in/opt-out preferences with consent timestamps and language selection (`EN`/`MR`/`HI`), duplicate-event prevention (`notification_logs`), localized templates for all 6 order lifecycle events, manual `wa.me` sharing + support links, and optional Stage 2 official WhatsApp Business Cloud API provider.
+- **Vegetable Combo Packs (`com.tazatokri.combo`, `src/features/combos/`):** Added staff combo management (`/staff/combos`), customer combo pack cards (`ShopCombosSection`), cart & checkout combo support, price snapshot preservation on orders, and single-pass constituent vegetable stock validation/deduction.
+- **Saved & Recurring Grocery Baskets (`com.tazatokri.basket`, `src/features/baskets/`):** Added customer-owned saved baskets, recurring reminder schedules (`DAILY`, `WEEKLY`, `CUSTOM_WEEKDAY`, `BIWEEKLY`), pause/resume/cancel controls, unavailable item alerts, and non-auto-charging reminder banners.
+- **Phase 1 Core Stabilization:** Added 36-vegetable Marathi/Hindi/phonetic synonym search (`src/data/vegetable-synonyms.ts`, `src/utils/vegetable-search.ts`), configurable low-stock thresholds, customer available-stock capping, daily/weekly wastage reports using actual purchase landed costs (`GET /api/reports/wastage`), and A4/thermal printable counter receipts (`SaleReceiptDialog.tsx`).
 
 ---
 

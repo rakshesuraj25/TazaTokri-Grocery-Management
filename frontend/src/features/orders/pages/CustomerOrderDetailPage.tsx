@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, RotateCcw, XCircle } from 'lucide-react'
+import { ArrowLeft, BookmarkPlus, Printer, RotateCcw, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,6 +12,8 @@ import { ListSkeleton } from '@/components/Skeletons'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useCartStore } from '@/features/cart/store'
 import { usePublicVegetables } from '@/features/catalog/hooks'
+import { SaveCurrentBasketDialog } from '@/features/baskets/components/SaveCurrentBasketDialog'
+import { CustomerOrderWhatsAppBar } from '@/features/notifications/components/CustomerOrderWhatsAppBar'
 import { PAYMENT_POLL_INTERVAL_MS } from '@/lib/businessRules'
 import { fmtDate } from '@/lib/dates'
 import { formatQty } from '@/lib/money'
@@ -23,6 +25,10 @@ import {
   useVerifyOnlinePayment,
 } from '../hooks'
 import { mapOrderItemsToCart } from '../orderAgain'
+import {
+  CustomerOrderReceiptDialog,
+  resolveOrderDocumentKind,
+} from '../components/CustomerOrderReceiptDialog'
 import { OrderStatusStepper } from '../components/OrderStatusStepper'
 import { PendingPaymentCard } from '../components/PendingPaymentCard'
 
@@ -45,6 +51,8 @@ export default function CustomerOrderDetailPage() {
   const [polling, setPolling] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [skippedNotice, setSkippedNotice] = useState<string[]>([])
+  const [saveBasketOpen, setSaveBasketOpen] = useState(false)
+  const [receiptOpen, setReceiptOpen] = useState(false)
 
   const orderQuery = useCustomerOrder(id, polling ? PAYMENT_POLL_INTERVAL_MS : false)
   const catalog = usePublicVegetables()
@@ -52,6 +60,12 @@ export default function CustomerOrderDetailPage() {
   const startPay = useStartOnlinePayment()
   const verifyPay = useVerifyOnlinePayment()
   const addItem = useCartStore((s) => s.addItem)
+
+  useEffect(() => {
+    if (polling && orderQuery.data && orderQuery.data.status !== 'PENDING_PAYMENT') {
+      setPolling(false)
+    }
+  }, [polling, orderQuery.data])
 
   if (orderQuery.isPending || orderQuery.isLoading) {
     return (
@@ -66,9 +80,6 @@ export default function CustomerOrderDetailPage() {
   }
 
   const order = orderQuery.data
-  if (polling && order.status !== 'PENDING_PAYMENT') {
-    setPolling(false)
-  }
 
   const handlePayNow = () => {
     setPayError(null)
@@ -162,6 +173,8 @@ export default function CustomerOrderDetailPage() {
         <OrderStatusStepper status={order.status} />
       </Card>
 
+      <CustomerOrderWhatsAppBar order={order} />
+
       {payError && (
         <p role="alert" className="bg-tomato-light text-tomato rounded-xl p-3 text-sm font-medium">
           {payError}
@@ -244,11 +257,35 @@ export default function CustomerOrderDetailPage() {
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        {catalog.data && (
-          <Button type="button" variant="secondary" className="flex-1" onClick={handleOrderAgain}>
-            <RotateCcw className="size-4" aria-hidden />
-            {t('orders.orderAgain', { defaultValue: 'Order again' })}
+        {resolveOrderDocumentKind(order) !== 'UNPAID_NOTICE' && (
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => setReceiptOpen(true)}
+          >
+            <Printer className="size-4" aria-hidden />
+            {resolveOrderDocumentKind(order) === 'PAYMENT_RECEIPT'
+              ? t('orders.printPaymentReceipt', { defaultValue: 'Print Receipt' })
+              : t('orders.printOrderConfirmation', { defaultValue: 'Print Confirmation' })}
           </Button>
+        )}
+        {catalog.data && (
+          <>
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleOrderAgain}>
+              <RotateCcw className="size-4" aria-hidden />
+              {t('orders.orderAgain', { defaultValue: 'Order again' })}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setSaveBasketOpen(true)}
+            >
+              <BookmarkPlus className="size-4" aria-hidden />
+              {t('baskets.saveOrderAsBasket', { defaultValue: 'Save as basket' })}
+            </Button>
+          </>
         )}
 
         {canCancel && (
@@ -263,6 +300,19 @@ export default function CustomerOrderDetailPage() {
           </Button>
         )}
       </div>
+
+      <CustomerOrderReceiptDialog
+        order={receiptOpen ? order : null}
+        onClose={() => setReceiptOpen(false)}
+      />
+
+      {catalog.data && (
+        <SaveCurrentBasketDialog
+          open={saveBasketOpen}
+          items={mapOrderItemsToCart(order.items, catalog.data).matched}
+          onClose={() => setSaveBasketOpen(false)}
+        />
+      )}
     </div>
   )
 }

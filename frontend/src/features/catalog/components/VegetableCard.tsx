@@ -8,6 +8,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
 import { useCartStore } from '@/features/cart/store'
+import { MAX_ITEM_COUNT } from '@/lib/businessRules'
+import { dec } from '@/lib/money'
 import { useFavouritesStore } from '../favouritesStore'
 import { sortPublicOptions } from '../shopHelpers'
 import type { PublicUnitOption, PublicVegetable } from '../types'
@@ -47,14 +49,39 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
       )
     : undefined
 
+  // Total base-unit quantity of this vegetable already in cart across all options
+  const totalBaseInCart = useMemo(() => {
+    return cartItems
+      .filter((i) => String(i.vegetableId) === String(vegetable.id))
+      .reduce((acc, i) => acc.add(dec(i.quantityInBaseUnit).mul(i.count)), dec(0))
+  }, [cartItems, vegetable.id])
+
+  const hasExplicitStock =
+    vegetable.availableStock !== undefined &&
+    vegetable.availableStock !== null &&
+    vegetable.availableStock !== ''
+  const availableStockDec = hasExplicitStock ? dec(vegetable.availableStock) : null
+
+  const selectedUnitBaseQty = selectedUnit ? dec(selectedUnit.quantityInBaseUnit) : dec(0)
+  const exceedsStockToAddOne =
+    availableStockDec !== null &&
+    totalBaseInCart.add(selectedUnitBaseQty).gt(availableStockDec)
+
   const unitLabel = t(`units.${vegetable.baseUnit}`, { defaultValue: vegetable.baseUnit })
   const hasPrice =
     selectedUnit?.price !== null &&
     selectedUnit?.price !== undefined &&
     selectedUnit?.price !== ''
 
+  const canAddSelected =
+    Boolean(selectedUnit) &&
+    hasPrice &&
+    vegetable.inStock &&
+    !exceedsStockToAddOne &&
+    (inCart?.count ?? 0) < MAX_ITEM_COUNT
+
   const handleAdd = () => {
-    if (!selectedUnit || !hasPrice || !vegetable.inStock) return
+    if (!selectedUnit || !canAddSelected) return
     addItem({
       vegetableId: String(vegetable.id),
       unitId: String(selectedUnit.unitId),
@@ -65,6 +92,10 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
       unitLabel: selectedUnit.label,
       pricePerUnit: String(selectedUnit.price),
       quantityInBaseUnit: String(selectedUnit.quantityInBaseUnit),
+      availableStock:
+        vegetable.availableStock !== undefined && vegetable.availableStock !== null
+          ? String(vegetable.availableStock)
+          : undefined,
     })
     setBump(true)
     setTimeout(() => setBump(false), 240)
@@ -133,14 +164,17 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
           >
             {sortedOptions.map((opt) => {
               const active = selectedUnit?.unitId === opt.unitId
+              const optExceedsTotalStock =
+                availableStockDec !== null && dec(opt.quantityInBaseUnit).gt(availableStockDec)
               return (
                 <button
                   key={opt.unitId}
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  disabled={optExceedsTotalStock}
                   onClick={() => setSelectedUnitId(opt.unitId)}
-                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap transition-colors duration-150 ${
+                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
                     active
                       ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
                       : 'border-border bg-secondary/70 text-secondary-foreground hover:bg-secondary'
@@ -189,17 +223,25 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             <span className="money-num w-6 text-center text-sm font-bold">{inCart.count}</span>
             <button
               type="button"
-              onClick={() =>
-                updateCount(String(vegetable.id), String(selectedUnit!.unitId), inCart.count + 1)
-              }
+              disabled={!canAddSelected}
+              onClick={() => {
+                if (canAddSelected) {
+                  updateCount(String(vegetable.id), String(selectedUnit!.unitId), inCart.count + 1)
+                }
+              }}
               aria-label={t('common.increase', { defaultValue: 'Increase' })}
-              className="touch-target bg-primary text-primary-foreground inline-flex items-center justify-center rounded-full transition-colors duration-150"
+              className="touch-target bg-primary text-primary-foreground inline-flex items-center justify-center rounded-full transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Plus className="size-4" aria-hidden />
             </button>
           </div>
         ) : (
-          <Button size="sm" onClick={handleAdd} className="min-h-11 rounded-full px-4">
+          <Button
+            size="sm"
+            disabled={!canAddSelected}
+            onClick={handleAdd}
+            className="min-h-11 rounded-full px-4"
+          >
             <ShoppingBasket className="size-4 shrink-0" aria-hidden />
             <span>{t('shop.addToCart')}</span>
           </Button>

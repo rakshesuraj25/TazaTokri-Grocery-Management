@@ -31,13 +31,108 @@ export const LOW_STOCK_THRESHOLD_KG = 5
 /** Display-only low-stock threshold for piece/bunch items. */
 export const LOW_STOCK_THRESHOLD_UNIT = 5
 
-export function getLowStockThreshold(baseUnit?: string | null): number {
-  return baseUnit === 'KG' ? LOW_STOCK_THRESHOLD_KG : LOW_STOCK_THRESHOLD_UNIT
+export interface LowStockThresholds {
+  KG: number
+  BUNCH: number
+  PIECE: number
 }
 
-export function isLowStock(quantity: Decimalish | null | undefined, baseUnit?: string | null): boolean {
-  const q = dec(quantity)
-  return q.gt(0) && q.lte(getLowStockThreshold(baseUnit))
+export const DEFAULT_LOW_STOCK_THRESHOLDS: Readonly<LowStockThresholds> = {
+  KG: LOW_STOCK_THRESHOLD_KG,
+  BUNCH: LOW_STOCK_THRESHOLD_UNIT,
+  PIECE: LOW_STOCK_THRESHOLD_UNIT,
+}
+
+const THRESHOLDS_STORAGE_KEY = 'tazatokri-low-stock-thresholds'
+
+export function getLowStockThresholds(): LowStockThresholds {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return { ...DEFAULT_LOW_STOCK_THRESHOLDS }
+    }
+    const raw = window.localStorage.getItem(THRESHOLDS_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_LOW_STOCK_THRESHOLDS }
+    const parsed = JSON.parse(raw) as Partial<LowStockThresholds>
+    return {
+      KG: Number(parsed.KG) > 0 ? Number(parsed.KG) : DEFAULT_LOW_STOCK_THRESHOLDS.KG,
+      BUNCH: Number(parsed.BUNCH) > 0 ? Number(parsed.BUNCH) : DEFAULT_LOW_STOCK_THRESHOLDS.BUNCH,
+      PIECE: Number(parsed.PIECE) > 0 ? Number(parsed.PIECE) : DEFAULT_LOW_STOCK_THRESHOLDS.PIECE,
+    }
+  } catch {
+    return { ...DEFAULT_LOW_STOCK_THRESHOLDS }
+  }
+}
+
+export function setLowStockThresholds(next: Partial<LowStockThresholds>): LowStockThresholds {
+  const current = getLowStockThresholds()
+  const updated: LowStockThresholds = {
+    KG: Number(next.KG) > 0 ? Number(next.KG) : current.KG,
+    BUNCH: Number(next.BUNCH) > 0 ? Number(next.BUNCH) : current.BUNCH,
+    PIECE: Number(next.PIECE) > 0 ? Number(next.PIECE) : current.PIECE,
+  }
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(THRESHOLDS_STORAGE_KEY, JSON.stringify(updated))
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return updated
+}
+
+export function resetLowStockThresholds(): LowStockThresholds {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(THRESHOLDS_STORAGE_KEY)
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return { ...DEFAULT_LOW_STOCK_THRESHOLDS }
+}
+
+export function getLowStockThreshold(
+  baseUnit?: string | null,
+  customThresholds?: Partial<LowStockThresholds>,
+): number {
+  const thresholds = customThresholds
+    ? { ...getLowStockThresholds(), ...customThresholds }
+    : getLowStockThresholds()
+  if (baseUnit === 'KG') return thresholds.KG
+  if (baseUnit === 'BUNCH') return thresholds.BUNCH
+  if (baseUnit === 'PIECE') return thresholds.PIECE
+  return LOW_STOCK_THRESHOLD_UNIT
+}
+
+export function isOutOfStock(quantity: Decimalish | null | undefined): boolean {
+  try {
+    return dec(quantity).lte(0)
+  } catch {
+    return true
+  }
+}
+
+export function isLowStock(
+  quantity: Decimalish | null | undefined,
+  baseUnit?: string | null,
+  customThresholds?: Partial<LowStockThresholds>,
+): boolean {
+  try {
+    const q = dec(quantity)
+    return q.gt(0) && q.lte(getLowStockThreshold(baseUnit, customThresholds))
+  } catch {
+    return false
+  }
+}
+
+export function getStockStatus(
+  quantity: Decimalish | null | undefined,
+  baseUnit?: string | null,
+  customThresholds?: Partial<LowStockThresholds>,
+): 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' {
+  if (isOutOfStock(quantity)) return 'OUT_OF_STOCK'
+  if (isLowStock(quantity, baseUnit, customThresholds)) return 'LOW_STOCK'
+  return 'IN_STOCK'
 }
 
 /** Seconds to poll order status after Razorpay closes. */

@@ -1,3 +1,5 @@
+import type { BaseUnit } from '@/features/catalog/types'
+
 export type SalePaymentMethod = 'CASH' | 'UPI'
 
 export interface CreateSaleItemInput {
@@ -16,6 +18,7 @@ export interface CreateSaleRequest {
 export interface SaleItemResponse {
   vegetableId: number | string
   vegetableName: string
+  baseUnit?: BaseUnit | null
   quantity: string | number
   unitPrice: string | number
   lineTotal: string | number

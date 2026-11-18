@@ -1,5 +1,14 @@
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, MapPin, Phone, Play, XCircle } from 'lucide-react'
+import {
+  Camera,
+  CheckCircle2,
+  MapPin,
+  MessageSquareText,
+  Phone,
+  Play,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -31,6 +40,7 @@ export function DeliveryOrderCard({
 
   return (
     <Card
+      data-testid={`delivery-order-card-${order.orderId}`}
       className={`space-y-3.5 p-4 ${
         order.deliveryStatus === 'OUT_FOR_DELIVERY'
           ? 'border-primary/60 bg-primary/[0.02] shadow-sm'
@@ -59,11 +69,31 @@ export function DeliveryOrderCard({
               })}
             </Badge>
             <Badge variant="outline">{order.paymentMethod}</Badge>
+            {order.otpVerified && (
+              <Badge variant="success" className="gap-1">
+                <ShieldCheck className="size-3" aria-hidden />
+                {order.otpVerificationMethod === 'MANUAL_OVERRIDE'
+                  ? t('delivery.manualVerifiedBadge', { defaultValue: 'Exception Verified' })
+                  : t('delivery.otpVerifiedBadge', { defaultValue: 'OTP Verified' })}
+              </Badge>
+            )}
+            {order.hasProofPhoto && (
+              <Badge variant="secondary" className="gap-1">
+                <Camera className="size-3" aria-hidden />
+                {t('delivery.podUploadedBadge', { defaultValue: 'Photo Proof' })}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 font-semibold">{order.customerName}</p>
           <p className="text-muted-foreground text-sm break-words">
             {order.address} — {order.pincode}
           </p>
+          {order.deliveryInstructions && (
+            <p className="bg-surface-subtle text-foreground mt-1.5 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+              <MessageSquareText className="text-primary mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>{order.deliveryInstructions}</span>
+            </p>
+          )}
         </div>
 
         {hasDue ? (

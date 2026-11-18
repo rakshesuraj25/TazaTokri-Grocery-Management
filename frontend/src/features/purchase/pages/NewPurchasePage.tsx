@@ -16,6 +16,10 @@ import { addMoney, dec, isValidDecimal, mulMoney, sumMoney, toApiMoney, toApiQty
 import { todayIST } from '@/lib/dates'
 import { toApiError } from '@/lib/api'
 import { useCreatePurchase, useSuppliers } from '../hooks'
+import {
+  InvoiceScannerCard,
+  type VerifiedPurchaseDraftPayload,
+} from '../components/InvoiceScannerCard'
 
 const itemSchema = z.object({
   vegetableId: z.coerce.number().int().positive('Required'),
@@ -64,6 +68,7 @@ export default function NewPurchasePage() {
     register,
     control,
     handleSubmit,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<PurchaseFormValues>({
@@ -77,7 +82,36 @@ export default function NewPurchasePage() {
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
+
+  const handleApplyAiDraft = (payload: VerifiedPurchaseDraftPayload) => {
+    if (payload.matchedSupplierId) {
+      setValue('supplierId', payload.matchedSupplierId, { shouldDirty: true })
+    }
+    if (payload.purchaseDate && payload.purchaseDate <= todayIST()) {
+      setValue('purchaseDate', payload.purchaseDate, { shouldDirty: true })
+    }
+    setValue('transportCost', payload.transportCost || '0', { shouldDirty: true })
+    if (payload.note) {
+      setValue('note', payload.note.slice(0, 200), { shouldDirty: true })
+    }
+
+    // Merge duplicate vegetable lines so uk_purchase_veg constraint is respected
+    const mergedMap = new Map<number, { vegetableId: number; quantity: string; ratePerUnit: string }>()
+    for (const item of payload.items) {
+      const existing = mergedMap.get(item.vegetableId)
+      if (existing) {
+        const sumQty = dec(existing.quantity || 0).plus(dec(item.quantity || 0))
+        existing.quantity = sumQty.toFixed(3).replace(/\.?0+$/, '')
+      } else {
+        mergedMap.set(item.vegetableId, { ...item })
+      }
+    }
+    const mergedItems = Array.from(mergedMap.values())
+    if (mergedItems.length > 0) {
+      replace(mergedItems)
+    }
+  }
   const itemsWatch = watch('items')
   const transportWatch = watch('transportCost')
 
@@ -122,6 +156,11 @@ export default function NewPurchasePage() {
         </Button>
         <h1 className="font-display text-2xl font-extrabold">{t('staff.purchase.newPurchase')}</h1>
       </div>
+
+      <InvoiceScannerCard
+        vegetables={vegetables.data ?? []}
+        onApplyToForm={handleApplyAiDraft}
+      />
 
       <Card className="p-5">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">

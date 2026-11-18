@@ -25,4 +25,19 @@ public class ReportController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 		return service.daily(date);
 	}
+
+	@GetMapping("/wastage")
+	@PreAuthorize("hasAnyRole('OWNER','STAFF')")
+	public WastageReport wastage(
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		return service.wastage(date);
+	}
+
+	@GetMapping("/intelligence")
+	@PreAuthorize("hasAnyRole('OWNER','STAFF')")
+	public BusinessIntelligenceReport intelligence(
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+		return service.intelligence(from, to);
+	}
 }

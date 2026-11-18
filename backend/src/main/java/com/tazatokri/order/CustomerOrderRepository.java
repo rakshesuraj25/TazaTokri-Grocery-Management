@@ -24,6 +24,7 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
     @EntityGraph(attributePaths = {"items", "items.vegetable"})
     Optional<CustomerOrder> findWithDetailsByIdAndCustomerId(Long id, Long customerId);
 
+    @EntityGraph(attributePaths = {"items", "items.vegetable"})
     Page<CustomerOrder> findByCustomerId(Long customerId, Pageable pageable);
     
     @EntityGraph(attributePaths = {"items", "items.vegetable"})
@@ -33,8 +34,10 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
     @Query("select o from CustomerOrder o where o.id = :id")
     Optional<CustomerOrder> findByIdForUpdate(@Param("id") Long id);
 
+    @EntityGraph(attributePaths = {"items", "items.vegetable"})
     List<CustomerOrder> findByDeliveryDateOrderByIdDesc(LocalDate date);
 
+    @EntityGraph(attributePaths = {"items", "items.vegetable"})
     List<CustomerOrder> findByDeliveryDateAndStatusOrderByIdDesc(LocalDate date, OrderStatus status);
     
     @EntityGraph(attributePaths = {"items", "items.vegetable"})
@@ -47,4 +50,13 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
             order by o.id
             """)
      List<Long> findExpiredPendingIds(@Param("before") LocalDateTime before);
+
+    @EntityGraph(attributePaths = {"items", "items.vegetable"})
+    @Query("""
+            select o from CustomerOrder o
+            where o.createdAt >= :from and o.createdAt < :to
+              and o.status not in (com.tazatokri.order.OrderStatus.CANCELLED, com.tazatokri.order.OrderStatus.PENDING_PAYMENT)
+            order by o.id desc
+            """)
+    List<CustomerOrder> findValidOrdersBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

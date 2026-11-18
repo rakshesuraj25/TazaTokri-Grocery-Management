@@ -28,6 +28,7 @@ const QuickSalePage = lazy(() => import('@/features/sales/pages/QuickSalePage'))
 const StockPage = lazy(() => import('@/features/inventory/pages/StockPage'))
 const StaffOrdersPage = lazy(() => import('@/features/orders/pages/StaffOrdersPage'))
 const CatalogPage = lazy(() => import('@/features/catalog/pages/CatalogPage'))
+const StaffCombosPage = lazy(() => import('@/features/combos/pages/StaffCombosPage'))
 const CatalogImagesPage = lazy(() => import('@/features/catalog/pages/CatalogImagesPage'))
 const VegetableFormPage = lazy(() => import('@/features/catalog/pages/VegetableFormPage'))
 const CategoriesPage = lazy(() => import('@/features/catalog/pages/CategoriesPage'))
@@ -95,6 +96,7 @@ export const router = createBrowserRouter([
           { path: '/staff/sale', element: wrap(<QuickSalePage />) },
           { path: '/staff/orders', element: wrap(<StaffOrdersPage />) },
           { path: '/staff/stock', element: wrap(<StockPage />) },
+          { path: '/staff/combos', element: wrap(<StaffCombosPage />) },
           { path: '/staff/catalog', element: wrap(<CatalogPage />) },
           { path: '/staff/catalog/new', element: wrap(<VegetableFormPage />) },
           { path: '/staff/catalog/:id', element: wrap(<VegetableFormPage />) },

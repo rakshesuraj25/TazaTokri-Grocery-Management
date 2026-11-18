@@ -62,4 +62,17 @@ public class PricingController {
     public PriceResponse apply(@PathVariable Long id, Authentication auth) {
         return service.applySuggestion(id, auth.getName());
     }
+
+    public record MarkdownPriceRequest(
+            @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal markdownPricePerUnit,
+            @Size(max = 180) String reason) {}
+
+    @PostMapping("/vegetables/{id}/markdown")
+    @PreAuthorize("hasAnyRole('OWNER','STAFF')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PriceResponse applyMarkdown(@PathVariable Long id,
+                                       @Valid @RequestBody MarkdownPriceRequest req,
+                                       Authentication auth) {
+        return service.applyMarkdown(id, req.markdownPricePerUnit(), req.reason(), auth.getName());
+    }
 }

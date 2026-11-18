@@ -1,10 +1,40 @@
-import { formatMoney, formatQty, toApiMoney } from '@/lib/money'
+import { dec, formatMoney, formatQty, subMoney, sumMoney, toApiMoney } from '@/lib/money'
 import type { SaleResponse } from './types'
 
 export interface BuildUpiInput {
   upiId?: string | null
   payeeName?: string
   amount: string | number
+}
+
+export interface ReceiptCalculationSummary {
+  receiptNumber: string
+  itemCount: number
+  subtotal: string
+  discount: string
+  hasDiscount: boolean
+  finalAmount: string
+}
+
+/**
+ * Computes authoritative receipt totals (subtotal, discount if applicable, final amount)
+ * from a completed SaleResponse.
+ */
+export function calculateReceiptSummary(sale: SaleResponse): ReceiptCalculationSummary {
+  const subtotalDec = sumMoney(sale.items.map((i) => i.lineTotal))
+  const finalDec = dec(sale.totalAmount)
+  const rawDiscount = subMoney(subtotalDec, finalDec)
+  const hasDiscount = rawDiscount.gt(0)
+  const discountDec = hasDiscount ? rawDiscount : dec(0)
+
+  return {
+    receiptNumber: `#${String(sale.id)}`,
+    itemCount: sale.items.length,
+    subtotal: subtotalDec.toFixed(2),
+    discount: discountDec.toFixed(2),
+    hasDiscount,
+    finalAmount: finalDec.toFixed(2),
+  }
 }
 
 /**
@@ -32,10 +62,10 @@ export function buildWhatsAppReceiptText(
     `${shopName} — Bill #${sale.id}`,
     `Payment: ${sale.paymentMethod}`,
     '',
-    ...sale.items.map(
-      (item) =>
-        `- ${item.vegetableName}: ${formatQty(item.quantity)} x ${formatMoney(item.unitPrice)} = ${formatMoney(item.lineTotal)}`,
-    ),
+    ...sale.items.map((item) => {
+      const unitSuffix = item.baseUnit ? ` ${String(item.baseUnit).toLowerCase()}` : ''
+      return `- ${item.vegetableName}: ${formatQty(item.quantity)}${unitSuffix} x ${formatMoney(item.unitPrice)} = ${formatMoney(item.lineTotal)}`
+    }),
     '',
     `Total: ${formatMoney(sale.totalAmount)}`,
     'Thank you for shopping fresh!',

@@ -231,5 +231,44 @@
   body {
     background: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  /* Thermal (58mm/80mm) & A4 print-friendly receipt layout */
+  .printable-receipt-dialog {
+    position: static !important;
+    transform: none !important;
+    max-width: 80mm !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 3mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .printable-receipt-dialog.receipt-width-58mm {
+    max-width: 58mm !important;
+    padding: 2mm !important;
+  }
+  .printable-receipt-dialog.receipt-width-80mm {
+    max-width: 80mm !important;
+    padding: 3mm !important;
+  }
+  .printable-receipt-dialog.receipt-width-a4 {
+    max-width: 190mm !important;
+    padding: 8mm !important;
+  }
+  .printable-receipt {
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    color: #000000 !important;
+  }
+  .printable-receipt table,
+  .printable-receipt tr,
+  .printable-receipt td,
+  .printable-receipt th {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }

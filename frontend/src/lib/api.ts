@@ -48,9 +48,12 @@ async function request<T>(
   body?: unknown,
   options: { public?: boolean } = {},
 ): Promise<T> {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
+  }
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json'
   }
 
   if (!options.public) {
@@ -63,7 +66,7 @@ async function request<T>(
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     })
   } catch {
     // Network failure / server down / CORS: status 0 lets the UI show "no connection"

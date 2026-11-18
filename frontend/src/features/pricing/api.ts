@@ -1,11 +1,19 @@
 import { api } from '@/lib/api'
-import type { CurrentPriceItem, PriceSuggestion, SetPriceRequest } from './types'
+import type {
+  CurrentPriceItem,
+  MarkdownPriceRequest,
+  PriceSuggestion,
+  SetPriceRequest,
+} from './types'
 
 export const pricingApi = {
   listCurrentPrices: () => api.get<CurrentPriceItem[]>('/api/pricing/current'),
 
   setPrice: (vegetableId: number | string, body: SetPriceRequest) =>
     api.put<CurrentPriceItem>(`/api/pricing/vegetables/${vegetableId}`, body),
+
+  applyMarkdown: (vegetableId: number | string, body: MarkdownPriceRequest) =>
+    api.post<CurrentPriceItem>(`/api/pricing/vegetables/${vegetableId}/markdown`, body),
 
   listPriceHistory: (vegetableId: number | string, page = 0) =>
     api.get<CurrentPriceItem[]>(`/api/pricing/vegetables/${vegetableId}/history?page=${page}`),

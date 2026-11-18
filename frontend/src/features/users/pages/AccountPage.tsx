@@ -33,6 +33,8 @@ import { usePublicVegetables } from '@/features/catalog/hooks'
 import { useFavouritesStore } from '@/features/catalog/favouritesStore'
 import { useCustomerOrders } from '@/features/orders/hooks'
 import { buildUsualVegetables, mapOrderItemsToCart } from '@/features/orders/orderAgain'
+import { SavedBasketsSection } from '@/features/baskets/components/SavedBasketsSection'
+import { NotificationPreferencesCard } from '@/features/notifications/components/NotificationPreferencesCard'
 import { fmtDate } from '@/lib/dates'
 import { useCustomerAddresses } from '../hooks'
 import { AddAddressDialog } from '../components/AddAddressDialog'
@@ -151,6 +153,18 @@ export default function AccountPage() {
           tone="danger"
           icon={<Heart className="size-5" />}
         />
+      </div>
+
+      {/* WhatsApp Notification Consent & Language Preferences */}
+      <NotificationPreferencesCard />
+
+      {/* Saved & Recurring Grocery Baskets */}
+      <div className="space-y-2">
+        <h2 className="font-display flex items-center gap-1.5 text-lg font-bold">
+          <Package className="text-primary size-5" aria-hidden />
+          {t('baskets.sectionTitle', { defaultValue: 'Saved & Recurring Baskets' })}
+        </h2>
+        <SavedBasketsSection onBasketLoaded={() => navigate('/shop')} />
       </div>
 
       {/* Saved Addresses */}

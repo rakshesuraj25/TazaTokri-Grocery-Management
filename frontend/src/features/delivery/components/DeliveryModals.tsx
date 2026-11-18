@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Banknote, CheckCircle2, QrCode } from 'lucide-react'
+import {
+  AlertTriangle,
+  Banknote,
+  Camera,
+  CheckCircle2,
+  KeyRound,
+  QrCode,
+  ShieldCheck,
+  Upload,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -8,8 +17,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { dec, formatMoney, toApiMoney } from '@/lib/money'
 import { toApiError } from '@/lib/api'
-import { useMarkDelivered, useMarkFailed } from '../hooks'
-import type { DeliveryOrder } from '../types'
+import {
+  useIssueDeliveryOtp,
+  useManualOtpOverride,
+  useMarkDelivered,
+  useMarkFailed,
+  useUploadDeliveryProof,
+  useVerifyDeliveryOtp,
+} from '../hooks'
+import type { DeliveryOrder, OtpIssueResponse } from '../types'
 
 interface DeliverOrderDialogProps {
   order: DeliveryOrder | null
@@ -19,15 +35,124 @@ interface DeliverOrderDialogProps {
 export function DeliverOrderDialog({ order, onClose }: DeliverOrderDialogProps) {
   const { t } = useTranslation()
   const markDelivered = useMarkDelivered()
+  const issueOtp = useIssueDeliveryOtp()
+  const verifyOtp = useVerifyDeliveryOtp()
+  const manualOverride = useManualOtpOverride()
+  const uploadProof = useUploadDeliveryProof()
+
   const [collectMethod, setCollectMethod] = useState<'CASH' | 'UPI_QR'>('CASH')
   const [upiRef, setUpiRef] = useState('')
   const [dialogError, setDialogError] = useState<string | null>(null)
+
+  // OTP state
+  const [otpVerifiedLocal, setOtpVerifiedLocal] = useState(false)
+  const [otpIssuedInfo, setOtpIssuedInfo] = useState<OtpIssueResponse | null>(null)
+  const [otpInput, setOtpInput] = useState('')
+  const [showOverrideForm, setShowOverrideForm] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+
+  // Proof of Delivery photo state
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofNote, setProofNote] = useState('')
+  const [proofUploadedLocal, setProofUploadedLocal] = useState(false)
 
   useEffect(() => {
     setCollectMethod('CASH')
     setUpiRef('')
     setDialogError(null)
+    setOtpVerifiedLocal(Boolean(order?.otpVerified))
+    setOtpIssuedInfo(null)
+    setOtpInput('')
+    setShowOverrideForm(false)
+    setOverrideReason('')
+    setProofFile(null)
+    setProofNote('')
+    setProofUploadedLocal(Boolean(order?.hasProofPhoto))
   }, [order])
+
+  const isVerified = Boolean(order?.otpVerified) || otpVerifiedLocal
+  const hasPhoto = Boolean(order?.hasProofPhoto) || proofUploadedLocal
+
+  const handleIssueOtp = () => {
+    if (!order) return
+    setDialogError(null)
+    issueOtp.mutate(order.orderId, {
+      onSuccess: (res) => {
+        setOtpIssuedInfo(res)
+        toast.success(res.message)
+      },
+      onError: (err) => setDialogError(toApiError(err).message),
+    })
+  }
+
+  const handleVerifyOtp = () => {
+    if (!order) return
+    const cleaned = otpInput.trim()
+    if (!/^[0-9]{6}$/.test(cleaned)) {
+      setDialogError(
+        t('delivery.otpSixDigitsRequired', {
+          defaultValue: 'Enter the 6-digit delivery OTP shared by the customer.',
+        }),
+      )
+      return
+    }
+    setDialogError(null)
+    verifyOtp.mutate(
+      { orderId: order.orderId, otp: cleaned },
+      {
+        onSuccess: (res) => {
+          setOtpVerifiedLocal(true)
+          toast.success(res.message)
+        },
+        onError: (err) => setDialogError(toApiError(err).message),
+      },
+    )
+  }
+
+  const handleManualOverride = () => {
+    if (!order) return
+    if (overrideReason.trim().length < 10) {
+      setDialogError(
+        t('delivery.overrideReasonMinLength', {
+          defaultValue:
+            'Provide a detailed reason (at least 10 characters) for the audit log.',
+        }),
+      )
+      return
+    }
+    setDialogError(null)
+    manualOverride.mutate(
+      { orderId: order.orderId, reason: overrideReason.trim() },
+      {
+        onSuccess: (res) => {
+          setOtpVerifiedLocal(true)
+          setShowOverrideForm(false)
+          toast.success(res.message)
+        },
+        onError: (err) => setDialogError(toApiError(err).message),
+      },
+    )
+  }
+
+  const handleUploadProof = () => {
+    if (!order || !proofFile) return
+    setDialogError(null)
+    uploadProof.mutate(
+      { orderId: order.orderId, file: proofFile, note: proofNote },
+      {
+        onSuccess: () => {
+          setProofUploadedLocal(true)
+          setProofFile(null)
+          toast.success(
+            t('delivery.proofUploadSuccess', {
+              defaultValue: 'Proof of delivery photo uploaded securely.',
+            }),
+          )
+        },
+        onError: (err) => setDialogError(toApiError(err).message),
+      },
+    )
+  }
 
   const handleConfirm = () => {
     if (!order) return
@@ -66,7 +191,10 @@ export function DeliverOrderDialog({ order, onClose }: DeliverOrderDialogProps) 
 
   return (
     <Sheet open={Boolean(order)} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="mx-auto max-w-lg rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-2xl"
+      >
         {order && (
           <div className="space-y-4">
             <SheetHeader>
@@ -81,6 +209,177 @@ export function DeliverOrderDialog({ order, onClose }: DeliverOrderDialogProps) 
               </p>
             )}
 
+            {/* Step 1: Delivery OTP Verification */}
+            <div
+              data-testid="delivery-otp-section"
+              className="border-border bg-surface-subtle space-y-2.5 rounded-xl border p-3 text-xs"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-display flex items-center gap-1.5 text-sm font-bold">
+                  <KeyRound className="text-primary size-4" aria-hidden />
+                  {t('delivery.otpVerificationTitle', {
+                    defaultValue: '1. Customer OTP Verification',
+                  })}
+                </span>
+                {isVerified && (
+                  <span className="bg-primary/15 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold">
+                    <ShieldCheck className="size-3.5" aria-hidden />
+                    {t('delivery.verifiedLabel', { defaultValue: 'Verified' })}
+                  </span>
+                )}
+              </div>
+
+              {!isVerified ? (
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      loading={issueOtp.isPending}
+                      onClick={handleIssueOtp}
+                    >
+                      {t('delivery.issueOtpBtn', {
+                        defaultValue: 'Send / Issue 6-Digit OTP',
+                      })}
+                    </Button>
+                    {otpIssuedInfo && (
+                      <span className="text-muted-foreground text-[11px]">
+                        {otpIssuedInfo.maskedCustomerPhone}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      aria-label={t('delivery.enterOtpLabel', {
+                        defaultValue: '6-digit delivery OTP',
+                      })}
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="6-digit OTP"
+                      value={otpInput}
+                      onChange={(e) => setOtpInput(e.target.value)}
+                      className="h-9 font-mono text-sm tracking-widest"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      loading={verifyOtp.isPending}
+                      onClick={handleVerifyOtp}
+                    >
+                      {t('delivery.verifyOtpBtn', { defaultValue: 'Verify OTP' })}
+                    </Button>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowOverrideForm((v) => !v)}
+                      className="text-muted-foreground hover:text-foreground text-[11px] font-medium underline"
+                    >
+                      {t('delivery.manualExceptionToggle', {
+                        defaultValue:
+                          'Customer has no network / phone unreachable? Use audited exception',
+                      })}
+                    </button>
+
+                    {showOverrideForm && (
+                      <div className="border-turmeric bg-turmeric-light/30 mt-2 space-y-2 rounded-lg border p-2.5">
+                        <p className="text-turmeric-foreground flex items-center gap-1 text-[11px] font-semibold">
+                          <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                          {t('delivery.manualExceptionAuditNote', {
+                            defaultValue:
+                              'Manual override is logged in the security audit trail with your staff ID.',
+                          })}
+                        </p>
+                        <Input
+                          aria-label={t('delivery.overrideReasonLabel', {
+                            defaultValue: 'Mandatory override reason',
+                          })}
+                          placeholder="Reason (e.g. Customer phone off, verified ID at doorstep)"
+                          value={overrideReason}
+                          onChange={(e) => setOverrideReason(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          loading={manualOverride.isPending}
+                          onClick={handleManualOverride}
+                        >
+                          {t('delivery.confirmOverrideBtn', {
+                            defaultValue: 'Record Audited Manual Verification',
+                          })}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  {t('delivery.otpVerifiedReadyNote', {
+                    defaultValue:
+                      'Customer verification recorded. You can now complete payment collection and delivery.',
+                  })}
+                </p>
+              )}
+            </div>
+
+            {/* Step 2: Optional Proof of Delivery Photo */}
+            <div
+              data-testid="delivery-pod-section"
+              className="border-border bg-surface-subtle space-y-2 rounded-xl border p-3 text-xs"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-display flex items-center gap-1.5 text-sm font-bold">
+                  <Camera className="text-primary size-4" aria-hidden />
+                  {t('delivery.podSectionTitle', {
+                    defaultValue: '2. Proof of Delivery Photo (Optional)',
+                  })}
+                </span>
+                {hasPhoto && (
+                  <span className="bg-primary/15 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold">
+                    <CheckCircle2 className="size-3.5" aria-hidden />
+                    {t('delivery.photoSavedBadge', { defaultValue: 'Uploaded' })}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  aria-label={t('delivery.podFileInputLabel', {
+                    defaultValue: 'Proof of delivery photo',
+                  })}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                  className="h-9 text-xs"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!proofFile}
+                  loading={uploadProof.isPending}
+                  onClick={handleUploadProof}
+                >
+                  <Upload className="size-3.5" aria-hidden />
+                  {t('delivery.uploadProofBtn', { defaultValue: 'Upload Photo' })}
+                </Button>
+              </div>
+              <Input
+                placeholder={t('delivery.podNotePlaceholder', {
+                  defaultValue: 'Optional delivery note (e.g. Handed to customer at gate)',
+                })}
+                value={proofNote}
+                onChange={(e) => setProofNote(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Step 3: Payment Collection */}
             {dec(order.amountToCollect).gt(0) ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2" role="radiogroup">

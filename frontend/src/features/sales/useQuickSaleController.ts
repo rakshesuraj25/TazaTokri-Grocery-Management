@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useStaffCatalog, useToggleAvailability } from '@/features/catalog/hooks'
@@ -29,6 +29,7 @@ export function useQuickSaleController() {
   const [keypadTarget, setKeypadTarget] = useState<BillLine | null>(null)
   const [completedSale, setCompletedSale] = useState<SaleResponse | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const submittingRef = useRef(false)
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -89,10 +90,11 @@ export function useQuickSaleController() {
   }
 
   const handleSubmit = () => {
-    if (createSale.isPending) return
+    if (createSale.isPending || submittingRef.current) return
     const validLines = syncedLines.filter((l) => isPositive(l.quantity))
     if (validLines.length === 0) return
     if (validLines.some((l) => dec(l.quantity).gt(dec(l.item.stock)))) return
+    submittingRef.current = true
     setSubmitError(null)
 
     createSale.mutate(
@@ -106,6 +108,7 @@ export function useQuickSaleController() {
       },
       {
         onSuccess: (sale) => {
+          submittingRef.current = false
           toast.success(t('staff.sale.saleSuccess'))
           setLastBill(validLines)
           setLines([])
@@ -113,7 +116,10 @@ export function useQuickSaleController() {
           setMobileSheetOpen(false)
           setCompletedSale(sale)
         },
-        onError: (err) => setSubmitError(toApiError(err).message),
+        onError: (err) => {
+          submittingRef.current = false
+          setSubmitError(toApiError(err).message)
+        },
       },
     )
   }

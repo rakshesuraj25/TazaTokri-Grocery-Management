@@ -86,7 +86,7 @@ public class OrderFlowService {
                 : orders.findByDeliveryDateAndStatusOrderByIdDesc(d, status);
 
         return list.stream()
-                .map(o -> OrderResponse.from(o, false))
+                .map(o -> OrderResponse.from(o, true))
                 .toList();
     }
 
@@ -130,7 +130,7 @@ public class OrderFlowService {
 
             if (actual.put(
                     l.vegetableId(),
-                    l.actualQuantity().setScale(3, RoundingMode.UNNECESSARY)
+                    l.actualQuantity().setScale(3, RoundingMode.HALF_UP)
             ) != null) {
                 throw new BadRequestException(
                         "Vegetable repeated: " + l.vegetableId()

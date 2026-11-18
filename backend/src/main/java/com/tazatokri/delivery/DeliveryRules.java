@@ -41,8 +41,7 @@ public class DeliveryRules {
     }
 
     public BigDecimal feeFor(BigDecimal subtotal) {
-        return subtotal.compareTo(freeAbove) > 0 ? BigDecimal.ZERO : fee;
-    
+        return subtotal.compareTo(freeAbove) >= 0 ? BigDecimal.ZERO : fee;
     }
 
     public LocalDate deliveryDateFor(LocalDateTime orderedAt) {

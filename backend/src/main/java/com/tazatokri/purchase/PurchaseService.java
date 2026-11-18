@@ -122,6 +122,6 @@ public class PurchaseService {
     @Transactional(readOnly = true)
     public List<PurchaseResponse> list(int page) {
         return purchases.findAllByOrderByPurchaseDateDescIdDesc(PageRequest.of(page, 20))
-                .map(p -> PurchaseResponse.from(p, false)).getContent();
+                .map(p -> PurchaseResponse.from(p, true)).getContent();
     }
 }

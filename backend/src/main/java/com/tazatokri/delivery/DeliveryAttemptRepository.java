@@ -10,6 +10,10 @@ public interface DeliveryAttemptRepository extends JpaRepository<DeliveryAttempt
 
 	Optional<DeliveryAttempt> findFirstByOrderIdAndStatusIn(Long orderId, Collection<DeliveryStatus> statuses);
 
+	Optional<DeliveryAttempt> findFirstByOrderIdOrderByIdDesc(Long orderId);
+
+	List<DeliveryAttempt> findByOrderIdInOrderByIdAsc(Collection<Long> orderIds);
+
 	List<DeliveryAttempt> findByDeliveryUserIdAndStatusInOrderByIdAsc(Long userId, Collection<DeliveryStatus> statuses);
 
 	List<DeliveryAttempt> findByOrderIdOrderByIdAsc(Long orderId);

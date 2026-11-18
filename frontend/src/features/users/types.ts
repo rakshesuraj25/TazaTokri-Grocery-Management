@@ -8,6 +8,9 @@ export interface CustomerAddress {
   landmark?: string | null
   pincode: string
   defaultAddress: boolean
+  deliveryInstructions?: string | null
+  latitude?: string | number | null
+  longitude?: string | number | null
 }
 
 export interface CreateAddressRequest {
@@ -17,6 +20,9 @@ export interface CreateAddressRequest {
   landmark?: string
   /** 6-digit Indian pincode */
   pincode: string
+  deliveryInstructions?: string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface StaffUser {

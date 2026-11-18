@@ -1,0 +1,4 @@
+﻿2026-11-18 23:54:29 [INFO] Starting TazaTokri database backup for 'tazatokri' on localhost:3306
+2026-11-18 23:54:29 [WARN] Live mysqldump connection unavailable; generating schema + migration snapshot backup.
+2026-11-18 23:54:29 [INFO] Schema snapshot backup created: tazatokri_backup_20261118_235429.sql
+2026-11-18 23:54:30 [INFO] Backup verified (21384 bytes, sha256=e3795f504fe4063b509c76984c881071316706277de0ee9a07253a44a5d8c41d).

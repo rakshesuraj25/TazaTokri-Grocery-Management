@@ -1,5 +1,6 @@
 package com.tazatokri.user;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.*;
@@ -32,6 +33,15 @@ public class Address {
 
     @Column(nullable = false, length = 6)
     private String pincode;
+
+    @Column(name = "delivery_instructions", length = 255)
+    private String deliveryInstructions;
+
+    @Column(precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(precision = 10, scale = 7)
+    private BigDecimal longitude;
 
     @Column(nullable = false)
     private boolean defaultAddress = false;

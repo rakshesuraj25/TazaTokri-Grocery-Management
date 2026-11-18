@@ -16,11 +16,18 @@ export interface PlaceOrderItemInput {
   count: number
 }
 
+export interface PlaceOrderComboInput {
+  comboId: number | string
+  /** 1..10 */
+  count: number
+}
+
 export interface PlaceOrderRequest {
   clientRef: string
   addressId: number | string
   paymentMethod: OrderPaymentMethod
   items: PlaceOrderItemInput[]
+  combos?: PlaceOrderComboInput[]
 }
 
 export interface OrderItemResponse {
@@ -40,6 +47,7 @@ export interface OrderResponse {
   deliveryDate: string
   deliveryAddress: string
   deliveryPincode: string
+  deliveryInstructions?: string | null
   subtotal: string | number
   deliveryFee: string | number
   estimatedTotal: string | number

@@ -27,6 +27,7 @@ const addressSchema = z.object({
     .string()
     .trim()
     .regex(/^[0-9]{6}$/, 'addresses.invalidPincode'),
+  deliveryInstructions: z.string().trim().max(255).optional(),
 })
 
 type AddressForm = z.infer<typeof addressSchema>
@@ -49,7 +50,14 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
     formState: { errors },
   } = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
-    defaultValues: { label: 'Home', line1: '', line2: '', landmark: '', pincode: '' },
+    defaultValues: {
+      label: 'Home',
+      line1: '',
+      line2: '',
+      landmark: '',
+      pincode: '',
+      deliveryInstructions: '',
+    },
   })
 
   const close = () => {
@@ -67,6 +75,7 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
         line2: values.line2?.trim() || undefined,
         landmark: values.landmark?.trim() || undefined,
         pincode: values.pincode.trim(),
+        deliveryInstructions: values.deliveryInstructions?.trim() || undefined,
       },
       {
         onSuccess: (addr) => {
@@ -133,6 +142,22 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
                 </p>
               )}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="addr-instructions">
+              {t('addresses.deliveryInstructions', {
+                defaultValue: 'Delivery Instructions',
+              })}{' '}
+              ({t('common.optional')})
+            </Label>
+            <Input
+              id="addr-instructions"
+              placeholder={t('addresses.deliveryInstructionsPlaceholder', {
+                defaultValue: 'e.g. Ring doorbell once, leave with security guard',
+              })}
+              {...register('deliveryInstructions')}
+            />
           </div>
 
           <DialogFooter>

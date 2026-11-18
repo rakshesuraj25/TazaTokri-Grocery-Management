@@ -68,6 +68,9 @@ public class SaleService {
         for (Map.Entry<Long, BigDecimal> e : qtyByVegetable.entrySet()) {
             Vegetable v = vegetables.findById(e.getKey())
                     .orElseThrow(() -> new BadRequestException("Vegetable does not exist: " + e.getKey()));
+            if (!v.isActive() || !v.isAvailable()) {
+                throw new BadRequestException(v.getNameEn() + " is not available today");
+            }
             VegetablePrice price = prices.findFirstByVegetableIdOrderByIdDesc(v.getId())
                     .orElseThrow(() -> new BadRequestException("No price set for " + v.getNameEn()));
 
@@ -106,6 +109,6 @@ public class SaleService {
         LocalDate d = (date == null) ? LocalDate.now() : date;
         return sales.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByIdDesc(
                         d.atStartOfDay(), d.plusDays(1).atStartOfDay())
-                .stream().map(s -> SaleResponse.from(s, false)).toList();
+                .stream().map(s -> SaleResponse.from(s, true)).toList();
     }
 }

@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -15,6 +17,7 @@ import com.tazatokri.catalog.Vegetable;
 import com.tazatokri.catalog.VegetableRepository;
 import com.tazatokri.common.BadRequestException;
 import com.tazatokri.common.ResourceNotFoundException;
+import com.tazatokri.inventory.StockMovementRepository;
 import com.tazatokri.purchase.PurchaseItemRepository;
 import com.tazatokri.purchase.PurchaseItemRepository.CostSummary;
 import com.tazatokri.user.UserRepository;
@@ -28,6 +31,7 @@ public class PricingService {
     private final PurchaseItemRepository purchaseItems;
     private final VegetableRepository vegetables;
     private final UserRepository users;
+    private final StockMovementRepository movements;
     private final int lookbackDays;
     private final BigDecimal wastagePercent;
     private final BigDecimal marginPercent;
@@ -35,6 +39,15 @@ public class PricingService {
 
     public PricingService(VegetablePriceRepository prices, PurchaseItemRepository purchaseItems,
                           VegetableRepository vegetables, UserRepository users,
+                          int lookbackDays, BigDecimal wastagePercent,
+                          BigDecimal marginPercent, BigDecimal roundingStep) {
+        this(prices, purchaseItems, vegetables, users, null, lookbackDays, wastagePercent, marginPercent, roundingStep);
+    }
+
+    @Autowired
+    public PricingService(VegetablePriceRepository prices, PurchaseItemRepository purchaseItems,
+                          VegetableRepository vegetables, UserRepository users,
+                          StockMovementRepository movements,
                           @Value("${app.pricing.lookback-days}") int lookbackDays,
                           @Value("${app.pricing.wastage-percent}") BigDecimal wastagePercent,
                           @Value("${app.pricing.margin-percent}") BigDecimal marginPercent,
@@ -48,6 +61,7 @@ public class PricingService {
         this.purchaseItems = purchaseItems;
         this.vegetables = vegetables;
         this.users = users;
+        this.movements = movements;
         this.lookbackDays = lookbackDays;
         this.wastagePercent = wastagePercent;
         this.marginPercent = marginPercent;
@@ -98,6 +112,32 @@ public class PricingService {
         String cleanNote = (note == null || note.isBlank()) ? null : note.trim();
         VegetablePrice saved = prices.save(new VegetablePrice(v, price, source, cleanNote, userId));
         return PriceResponse.from(saved);
+    }
+
+    @Transactional
+    public PriceResponse applyMarkdown(Long vegetableId, BigDecimal markdownPrice, String reason, String actorPhone) {
+        Vegetable v = activeVegetable(vegetableId);
+        if (movements != null) {
+            BigDecimal currentStock = movements.currentStock(vegetableId);
+            if (currentStock == null || currentStock.signum() <= 0) {
+                throw new BadRequestException("Cannot apply markdown clearance price when stock is zero for " + v.getNameEn());
+            }
+        }
+        String cleanReason = (reason == null || reason.isBlank()) ? "End-of-day clearance" : reason.trim();
+        String lower = cleanReason.toLowerCase(Locale.ROOT);
+        if (lower.contains("spoil") || lower.contains("rotten") || lower.contains("unfit")) {
+            throw new BadRequestException("Spoiled or unfit stock must be recorded as Wastage, not sold on clearance.");
+        }
+        BigDecimal currentPrice = prices.findFirstByVegetableIdOrderByIdDesc(vegetableId)
+                .map(VegetablePrice::getPricePerUnit).orElse(null);
+        if (currentPrice != null && markdownPrice.compareTo(currentPrice) >= 0) {
+            throw new BadRequestException("Markdown price (₹" + markdownPrice + ") must be lower than current price (₹" + currentPrice + ")");
+        }
+        String note = "Markdown: " + cleanReason + (currentPrice != null ? " (was ₹" + currentPrice + ")" : "");
+        if (note.length() > 255) {
+            note = note.substring(0, 255);
+        }
+        return setPrice(vegetableId, markdownPrice, note, PriceSource.MANUAL, actorPhone);
     }
 
     @Transactional(readOnly = true)

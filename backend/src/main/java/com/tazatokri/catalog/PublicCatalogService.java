@@ -63,8 +63,9 @@ public class PublicCatalogService {
                 .toList();
 
         boolean inStock = v.isAvailable() && stock.signum() > 0;
+        BigDecimal availableStock = inStock ? stock : BigDecimal.ZERO;
         String category = v.getCategory().getName();
         return new PublicVegetableResponse(v.getId(), v.getNameEn(), v.getNameMr(), v.getNameHi(),
-                v.getImageUrl(), category, v.getBaseUnit(), price, inStock, options);
+                v.getImageUrl(), category, v.getBaseUnit(), price, inStock, availableStock, options);
     }
 }

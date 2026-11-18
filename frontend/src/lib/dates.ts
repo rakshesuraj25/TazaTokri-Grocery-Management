@@ -1,7 +1,7 @@
 /**
  * Date/time helpers scoped to Asia/Kolkata timezone.
  */
-import { format, parseISO, isToday, isSameDay } from 'date-fns'
+import { addDays, format, parseISO, isToday, isSameDay } from 'date-fns'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 
 const IST = 'Asia/Kolkata'
@@ -9,6 +9,12 @@ const IST = 'Asia/Kolkata'
 /** Get today's date string in YYYY-MM-DD format (IST). */
 export function todayIST(): string {
   return formatInTimeZone(new Date(), IST, 'yyyy-MM-dd')
+}
+
+/** Add or subtract days from a YYYY-MM-DD date string and return YYYY-MM-DD. */
+export function addDaysIST(isoDate: string, days: number): string {
+  const base = parseISO(isoDate)
+  return format(addDays(base, days), 'yyyy-MM-dd')
 }
 
 /** Format a date string or Date to a human-readable IST date. */

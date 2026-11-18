@@ -7,8 +7,17 @@ import java.util.List;
 
 public record OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paymentMethod,
         LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
+        String deliveryInstructions,
         BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
         BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items) {
+
+    public OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paymentMethod,
+            LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
+            BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
+            BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items) {
+        this(id, status, paymentMethod, deliveryDate, deliveryAddress, deliveryPincode, null,
+                subtotal, deliveryFee, estimatedTotal, finalTotal, createdAt, items);
+    }
 
     public record Item(Long vegetableId, String vegetableName, BigDecimal quantity,
             BigDecimal unitPrice, BigDecimal estimatedLineTotal,
@@ -23,6 +32,7 @@ public record OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paym
                 : List.of();
         return new OrderResponse(o.getId(), o.getStatus(), o.getPaymentMethod(),
                 o.getDeliveryDate(), o.getDeliveryAddress(), o.getDeliveryPincode(),
+                o.getDeliveryInstructions(),
                 o.getSubtotal(), o.getDeliveryFee(), o.getEstimatedTotal(),
                 o.getFinalTotal(), o.getCreatedAt(), items);
     }

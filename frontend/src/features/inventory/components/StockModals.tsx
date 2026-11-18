@@ -23,11 +23,22 @@ import { useRecordWastage } from '../hooks'
 
 export { AdjustmentDialog } from './AdjustmentDialog'
 
+export const WASTAGE_REASONS = [
+  'Spoiled',
+  'Damaged',
+  'Expired',
+  'Trimmed',
+  'Returned',
+  'Other',
+] as const
+export type WastageReason = (typeof WASTAGE_REASONS)[number]
+
 const wastageSchema = z.object({
   quantity: z
     .string()
     .trim()
     .refine((v) => isValidDecimal(v, 3) && dec(v).gt(0), 'staff.stock.positiveRequired'),
+  reason: z.string().trim().min(1),
   note: z.string().trim().max(200).optional(),
 })
 type WastageForm = z.infer<typeof wastageSchema>
@@ -52,30 +63,53 @@ export function WastageDialog({ vegetable, onClose }: WastageDialogProps) {
     formState: { errors },
   } = useForm<WastageForm>({
     resolver: zodResolver(wastageSchema),
-    defaultValues: { quantity: '', note: '' },
+    defaultValues: { quantity: '', reason: 'Spoiled', note: '' },
   })
-  const currentNote = watch('note') ?? ''
+  const selectedReason = watch('reason') || 'Spoiled'
   const reasonChips = [
     { key: 'Spoiled', label: t('staff.stock.reasonSpoiled', { defaultValue: 'Spoiled' }) },
+    { key: 'Damaged', label: t('staff.stock.reasonDamaged', { defaultValue: 'Damaged' }) },
+    { key: 'Expired', label: t('staff.stock.reasonExpired', { defaultValue: 'Expired' }) },
     { key: 'Trimmed', label: t('staff.stock.reasonTrimmed', { defaultValue: 'Trimmed' }) },
     { key: 'Returned', label: t('staff.stock.reasonReturned', { defaultValue: 'Returned' }) },
     { key: 'Other', label: t('staff.stock.reasonOther', { defaultValue: 'Other' }) },
   ]
 
   const close = () => {
-    reset()
+    reset({ quantity: '', reason: 'Spoiled', note: '' })
     setServerError(null)
     onClose()
   }
 
   const onSubmit = (values: WastageForm) => {
-    if (!vegetable) return
+    if (!vegetable || recordWastage.isPending) return
+    const qtyDec = dec(values.quantity)
+    const availStockDec = dec(vegetable.stock)
+    if (qtyDec.gt(availStockDec)) {
+      setServerError(
+        t('staff.sale.exceedsStock', {
+          stock: formatQty(vegetable.stock),
+          unit: vegetable.baseUnit,
+          defaultValue: `Cannot record wastage above current stock (${formatQty(vegetable.stock)} ${vegetable.baseUnit})`,
+        }),
+      )
+      return
+    }
     setServerError(null)
+    const cleanReason = values.reason.trim() || 'Spoiled'
+    const cleanNote = values.note?.trim()
+    const formattedNote = cleanNote
+      ? cleanNote.toLowerCase().startsWith(cleanReason.toLowerCase())
+        ? cleanNote
+        : `${cleanReason}: ${cleanNote}`
+      : cleanReason
+
     recordWastage.mutate(
       {
         vegetableId: vegetable.id,
         quantity: toApiQty(values.quantity),
-        note: values.note?.trim() || undefined,
+        reason: cleanReason,
+        note: formattedNote,
       },
       {
         onSuccess: () => {
@@ -119,6 +153,7 @@ export function WastageDialog({ vegetable, onClose }: WastageDialogProps) {
                   inputMode="decimal"
                   step="0.1"
                   min="0.001"
+                  max={String(vegetable.stock)}
                   aria-invalid={!!errors.quantity}
                   {...register('quantity')}
                 />
@@ -133,18 +168,21 @@ export function WastageDialog({ vegetable, onClose }: WastageDialogProps) {
                 <span className="text-sm font-medium">
                   {t('staff.stock.reason', { defaultValue: 'Reason' })}
                 </span>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('staff.stock.reason', { defaultValue: 'Reason' })}>
                   {reasonChips.map((chip) => {
-                    const active = currentNote.startsWith(chip.key)
+                    const active = selectedReason === chip.key
                     return (
                       <Button
                         key={chip.key}
                         type="button"
+                        role="radio"
+                        aria-checked={active}
                         size="sm"
                         variant={active ? 'default' : 'outline'}
-                        onClick={() =>
+                        onClick={() => {
+                          setValue('reason', chip.key, { shouldDirty: true, shouldTouch: true })
                           setValue('note', chip.key, { shouldDirty: true, shouldTouch: true })
-                        }
+                        }}
                       >
                         {chip.label}
                       </Button>

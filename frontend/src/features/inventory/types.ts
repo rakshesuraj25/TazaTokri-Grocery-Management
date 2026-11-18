@@ -31,6 +31,7 @@ export interface RecordWastageRequest {
   vegetableId: number | string
   /** Strictly > 0 in base unit */
   quantity: string
+  reason?: string
   note?: string
 }
 
