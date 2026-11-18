@@ -1,69 +1,91 @@
-# TazaTokri — Frontend
+# TazaTokri — Grocery & Vegetable Management System
 
-Business app for a real vegetable shop (physical counter + online delivery).
-One React app, three experiences, routed by role after login, plus a public counter display:
+A production full-stack application for a real vegetable store (physical counter POS + online delivery shop).
+
+---
+
+## Monorepo Architecture
+
+```text
+Taza_Tokri/
+├── frontend/                      # React 19 + TypeScript + Vite + Tailwind CSS v4 PWA
+│   ├── src/                       # Components, context, pages, styles
+│   ├── public/                    # 36/36 studio vegetable photos, icons, manifest
+│   ├── docs/                      # Architecture, IMAGES.md (36 studio photos), API specs
+│   ├── scripts/                   # Verification & helper scripts
+│   ├── tests/                     # Playwright & Vitest test suites
+│   ├── Dockerfile                 # Frontend production container
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tsconfig.json
+│
+├── backend/                       # Spring Boot 4.1.2 + Java 21 + Maven
+│   ├── src/                       # Controllers, entities, repositories, services
+│   ├── pom.xml                    # Maven build configuration
+│   └── mvnw                       # Maven wrapper
+│
+├── docker-compose.yml             # Orchestrates MySQL, Backend, and Frontend
+├── .gitignore                     # Unified git ignore rules
+└── README.md                      # Developer guide & onboarding
+```
+
+---
+
+## Three Role-Based Surfaces + Public Board
 
 | Role / Surface | Route | Design Direction & Focus |
 |---|---|---|
-| CUSTOMER | `/shop`, `/checkout`, `/orders`, `/account` | **Modern Organic** — mobile-first storefront, EN/MR/HI search, cart & free-delivery progress, Razorpay / COD checkout, order tracking & "Order again" |
-| OWNER / STAFF | `/staff/*` | **Mandi Fresh** — Quick Sale counter POS (keypad, UPI text details, WhatsApp receipt, 5s Undo), Stock with `StockMeter` & restock list, Products tabs (Details / Pricing / Stock), Purchases with landed-cost preview, Orders workflow, Cash Settlement & Refund processing |
-| DELIVERY | `/delivery` | **Phone-first** — day summary strip, pull-to-refresh, `Collect ₹X` / `Prepaid, collect nothing`, `tel:` & Maps links, Start / Deliver (`CASH` or `UPI_QR`) / Fail sheets |
-| PUBLIC BOARD | `/display/prices` | Read-only chalkboard price display auto-refreshing every 60 seconds |
+| **CUSTOMER** | `/shop`, `/checkout`, `/orders`, `/account` | **Modern Organic** — mobile-first storefront, EN/MR/HI search, cart & free-delivery progress, Razorpay / COD checkout, order tracking & "Order again" |
+| **OWNER / STAFF** | `/staff/*` | **Mandi Fresh** — Quick Sale counter POS (keypad, UPI text details, WhatsApp receipt, 5s Undo), Stock with `StockMeter` & restock list, Products tabs (Details / Pricing / Stock), Purchases with landed-cost preview, Orders workflow, Cash Settlement & Refund processing |
+| **DELIVERY** | `/delivery` | **Phone-first** — day summary strip, pull-to-refresh, `Collect ₹X` / `Prepaid, collect nothing`, `tel:` & Maps links, Start / Deliver (`CASH` or `UPI_QR`) / Fail sheets |
+| **PUBLIC BOARD** | `/display/prices` | Read-only chalkboard price display auto-refreshing every 60 seconds |
 
-Users with several roles get a role switcher in the header.
+---
 
-## Stack
+## Tech Stack
 
-React 19 · Vite · TypeScript (strict) · React Router (data router, lazy routes) · TanStack Query ·
-Zustand (auth + cart + favourites) · Tailwind CSS v4 + shadcn/ui · react-hook-form + zod · react-i18next (en / mr / hi) ·
-Recharts · sonner · date-fns (Asia/Kolkata) · vite-plugin-pwa · Vitest + RTL · Playwright.
+- **Frontend:** React 19 · Vite · TypeScript (strict) · React Router 7 · TanStack Query v5 · Zustand · Tailwind CSS v4 · shadcn/ui · react-hook-form + zod · react-i18next (en / mr / hi) · Recharts · Lucide Icons · vite-plugin-pwa · Vitest + RTL · Playwright.
+- **Backend:** Java 21 · Spring Boot 4.1.2 · Spring Data JPA / Hibernate · Spring Security · Flyway Migrations · MySQL 8.4 · Maven.
+- **Design System:** Dual theme: **Modern Organic** (customers) & **Mandi Fresh** (staff POS/inventory). 36/36 verified studio photographs on warm cream `#FAF8F2`.
 
-## Getting started
+---
 
+## Getting Started
+
+### Prerequisites
+- Node.js 20+ & npm
+- Java 21 JDK
+- MySQL 8.4 (or Docker)
+
+### 1. Frontend Setup
 ```powershell
+# From root or inside frontend/:
+cd frontend
 npm install
-copy .env.example .env      # VITE_API_URL=http://localhost:8080
+copy .env.example .env
 npm run dev                 # http://localhost:5173
 ```
 
-Optional environment variables in `.env`:
+### 2. Backend Setup
+```powershell
+cd backend
+./mvnw clean spring-boot:run   # http://localhost:8080
+```
 
-- `VITE_API_URL` — Spring Boot backend base URL (`tazatokri-backend/`)
-- `VITE_SHOP_UPI_ID` — Shop UPI VPA displayed as text + `upi://pay` URI during counter `UPI` billing
-- `VITE_USE_MOCKS=true` — Only for offline dev when backend is stopped (default `false`)
+### 3. Docker Compose (Full Stack)
+```powershell
+docker compose up -d
+```
 
-| Script | Purpose |
+---
+
+## Useful Commands (Root or Frontend)
+
+| Command | Purpose |
 |---|---|
-| `npm run dev` | Local Vite dev server |
-| `npm run build` | Type-check (`tsc -b`) + production PWA build |
-| `npm run test` | Vitest unit & component tests |
-| `npm run test:e2e` | Playwright critical flows |
-| `npm run lint` / `npm run typecheck` | ESLint (`--max-warnings 0`) and TypeScript check |
-
-## Project layout
-
-```
-src/
-  app/            router, providers, App
-  components/     shared UI (Logo, StatusBadge, StockMeter, PriceTag, Stat, EmptyState, layouts, guards)
-  features/<x>/   api.ts · hooks.ts · types.ts · components/ · pages/
-                  (auth, catalog, inventory, purchase, pricing, sales, report,
-                   orders, delivery, payments, users, cart, landing)
-  hooks/          cross-feature hooks (e.g. useVegetableName)
-  i18n/           i18next setup + en/mr/hi JSON (see docs/I18N_REVIEW.md)
-  lib/            api client, decimal math (money.ts), IST dates, businessRules.ts, categoryTheme.ts
-  styles/         Tailwind v4 design tokens & Modern Organic / Mandi Fresh typography
-```
-
-## Rules this codebase follows
-
-- **Backend is authoritative** for stock, selling prices, order totals, delivery fees, and status transitions. Frontend totals/landed-cost previews are display-only and labelled *Estimated* or *Display-only*.
-- **One API client** (`src/lib/api.ts`) storing JWT solely under `localStorage` key `token`.
-- **401** clears session and redirects to `/login?expired=1`; **403** renders Forbidden page.
-- **Idempotency**: sales and orders generate a `clientRef` UUID once per attempt, reuse it on retries, and rotate only after success.
-- **No sample prices or client-side seeding**: catalog seeding only runs if the owner explicitly triggers and confirms it from `/staff/catalog`.
-- **Images**: self-hosted photos go in `public/vegetables/<slug>.jpg`; missing images render a category-coloured `VegetablePlaceholder` illustration (see `docs/IMAGES.md`).
-
-## Theming & Styleguide
-
-Design tokens live in `src/styles/globals.css` (light + dark, Fraunces serif display headings + sans/Devanagari UI fonts). A dev-only component showcase is available at `/dev/styleguide`.
+| `npm run dev` | Start Vite development server |
+| `npm run build` | Type-check (`tsc -b`) and build production PWA bundle |
+| `npm test` | Run Vitest test suite (16 files, 73 tests) |
+| `npm run lint` | ESLint verification (`--max-warnings 0`) |
+| `npm run typecheck` | TypeScript strict check (`tsc --noEmit`) |
+| `npm run check:images` | Verify all 36 vegetable studio photographs |

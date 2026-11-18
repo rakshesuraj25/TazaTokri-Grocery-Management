@@ -146,7 +146,10 @@ describe('Vegetable image & per-slug illustration pipeline', () => {
 
   it('check-images CLI passes when documented/empty and fails (exit 1) when an image lacks Source/Licence or is non-square', () => {
     const scriptPath = path.resolve(process.cwd(), 'scripts', 'check-images.mjs')
-    const rawDocs = fs.readFileSync(path.resolve(process.cwd(), 'docs', 'IMAGES.md'), 'utf8')
+    const docsFile = fs.existsSync(path.resolve(process.cwd(), 'docs', 'IMAGES.md'))
+      ? path.resolve(process.cwd(), 'docs', 'IMAGES.md')
+      : path.resolve(process.cwd(), '..', 'docs', 'IMAGES.md')
+    const rawDocs = fs.readFileSync(docsFile, 'utf8')
     const baseDocs = rawDocs.replace(
       /^\|\s*35\s*\|\s*`tomato`.*$/m,
       '| 35 | `tomato` | Tomato | illustration | - | - | - | - | - | no |',

@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DEFAULT_ROOT = path.resolve(__dirname, '..')
 const DEFAULT_VEG_DIR = path.join(DEFAULT_ROOT, 'public', 'vegetables')
-const DEFAULT_DOCS_PATH = path.join(DEFAULT_ROOT, 'docs', 'IMAGES.md')
+const DEFAULT_DOCS_PATH = fs.existsSync(path.join(DEFAULT_ROOT, 'docs', 'IMAGES.md'))
+  ? path.join(DEFAULT_ROOT, 'docs', 'IMAGES.md')
+  : path.join(DEFAULT_ROOT, '..', 'docs', 'IMAGES.md')
 
 export const MAX_KB = 80
 
