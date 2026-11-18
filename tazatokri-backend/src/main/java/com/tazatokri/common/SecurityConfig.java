@@ -1,0 +1,115 @@
+
+package com.tazatokri.common;
+
+import java.util.List;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.tazatokri.auth.JwtAuthFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+        this.jwtAuthFilter = jwtAuthFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+            .authorizeHttpRequests(auth -> auth
+
+                .requestMatchers("/api/ping/**").permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/auth/register").hasRole("OWNER")
+
+                .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+
+                // Razorpay webhook: no JWT required
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/api/payments/razorpay/webhook"
+                ).permitAll()
+
+                // Keep this rule LAST
+                .anyRequest().authenticated()
+            )
+
+            .exceptionHandling(exception -> exception
+
+                .authenticationEntryPoint((request, response, ex) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"message\":\"Authentication required\"}"
+                    );
+                })
+
+                .accessDeniedHandler((request, response, ex) -> {
+                    response.setStatus(403);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"message\":\"You do not have permission\"}"
+                    );
+                })
+            )
+
+            .addFilterBefore(
+                jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter.class
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOrigins(
+            List.of("http://localhost:5173")
+        );
+
+        config.setAllowedMethods(
+            List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        );
+
+        config.setAllowedHeaders(
+            List.of("Authorization", "Content-Type")
+        );
+
+        UrlBasedCorsConfigurationSource source =
+            new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/api/**", config);
+
+        return source;
+    }
+}

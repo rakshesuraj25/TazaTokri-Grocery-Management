@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/* Class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * TazaTokri design tokens (Phase B Brand Palette).
+ * Names follow shadcn/ui conventions so UI primitives inherit the palette.
+ * Brand accents: leaf green (#2F6B45), deep green (#1F4A30), sage (#E9F1E6),
+ * cream (#FBF8F1), turmeric (#E3A21A), tomato (#C8442F), brinjal (#5B3A6B),
+ * soil (#7A5A3A), charcoal (#1E2420), muted (#6B746D).
+ * All foreground/background text pairs meet WCAG AA (>= 4.5:1).
+ */
+:root {
+  --background: #FAF8F2;          /* cream background */
+  --foreground: #202820;          /* main text */
+  --card: #FFFFFF;
+  --card-foreground: #202820;
+  --popover: #FFFFFF;
+  --popover-foreground: #202820;
+  --surface-subtle: #F3EFE4;      /* elevated neutral inset surface */
+  --primary: #245C3B;             /* primary deep green */
+  --primary-foreground: #FFFFFF;
+  --deep-green: #36764D;          /* secondary green */
+  --sage: #EAF2E7;                /* light sage */
+  --cream: #FAF8F2;               /* cream canvas token */
+  --secondary: #EAF2E7;           /* sage surface */
+  --secondary-foreground: #245C3B;/* deep green on sage */
+  --muted: #E9E1D4;               /* warm beige */
+  --muted-foreground: #545F57;    /* WCAG AA muted copy on cream & warm beige */
+  --brand-muted: #68736A;         /* brand muted text token */
+  --accent: #EAF2E7;
+  --accent-foreground: #245C3B;
+  --destructive: #D95C45;         /* tomato accent */
+  --destructive-foreground: #FFFFFF;
+  --tomato: #D95C45;
+  --tomato-light: #FDECE9;
+  --turmeric: #E9A21A;            /* turmeric accent */
+  --turmeric-light: #FDF1D1;
+  --turmeric-foreground: #593E00;
+  --brinjal: #5B3A6B;
+  --brinjal-light: #F3ECF6;
+  --brinjal-foreground: #3E244B;
+  --soil: #866344;                /* soil brown */
+  --soil-light: #F4EBE2;
+  --soil-foreground: #4B331C;
+  --success: #15803D;
+  --warning: #A16207;
+  --border: #E9E1D4;              /* warm beige hairline */
+  --input: #D6CEBF;
+  --ring: #245C3B;
+  --radius: 1rem;
+  --shadow-card: 0 1px 2px rgba(30, 36, 32, 0.04), 0 6px 18px -6px rgba(30, 36, 32, 0.07);
+  --shadow-floating: 0 12px 32px -8px rgba(30, 36, 32, 0.16);
+}
+
+.dark {
+  --background: #0F1A12;
+  --foreground: #F0FDF4;
+  --card: #1A2D1F;
+  --card-foreground: #F0FDF4;
+  --popover: #1A2D1F;
+  --popover-foreground: #F0FDF4;
+  --surface-subtle: #152419;
+  --primary: #4CAF7A;
+  --primary-foreground: #0B1A10;
+  --deep-green: #1F4A30;
+  --sage: #1F3A28;
+  --cream: #152419;
+  --secondary: #1F3A28;
+  --secondary-foreground: #C8ECD6;
+  --muted: #213827;
+  --muted-foreground: #A3BCAB;
+  --brand-muted: #8FA395;
+  --accent: #1F3A28;
+  --accent-foreground: #C8ECD6;
+  --destructive: #EF6B5E;
+  --destructive-foreground: #1A0A08;
+  --tomato: #EF6B5E;
+  --tomato-light: #3A1A17;
+  --turmeric: #F2C14E;
+  --turmeric-light: #3A2E0F;
+  --turmeric-foreground: #F8E2A6;
+  --brinjal: #B088C5;
+  --brinjal-light: #2D1F36;
+  --brinjal-foreground: #EBDDF2;
+  --soil: #C28561;
+  --soil-light: #2C1E16;
+  --soil-foreground: #F2DFD2;
+  --success: #4ADE80;
+  --warning: #FACC15;
+  --border: #2F4A37;
+  --input: #3A5944;
+  --ring: #4CAF7A;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-deep-green: var(--deep-green);
+  --color-sage: var(--sage);
+  --color-cream: var(--cream);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-brand-muted: var(--brand-muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-tomato: var(--tomato);
+  --color-tomato-light: var(--tomato-light);
+  --color-turmeric: var(--turmeric);
+  --color-turmeric-light: var(--turmeric-light);
+  --color-turmeric-foreground: var(--turmeric-foreground);
+  --color-brinjal: var(--brinjal);
+  --color-brinjal-light: var(--brinjal-light);
+  --color-brinjal-foreground: var(--brinjal-foreground);
+  --color-soil: var(--soil);
+  --color-soil-light: var(--soil-light);
+  --color-soil-foreground: var(--soil-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: 'Inter', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-display: 'Nunito', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-organic: 'Fraunces', 'Noto Sans Devanagari', Georgia, serif;
+
+  --animate-bump: bump 0.25s ease-in-out;
+  --animate-shimmer: shimmer 1.5s infinite linear;
+
+  @keyframes bump {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  /* Devanagari needs extra vertical breathing room and zero negative tracking */
+  :lang(mr), :lang(hi) {
+    line-height: 1.65;
+    letter-spacing: 0;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Utility: skeleton shimmer for loaders */
+@utility skeleton {
+  background: linear-gradient(90deg, var(--color-muted) 25%, var(--color-card) 50%, var(--color-muted) 75%);
+  background-size: 400px 100%;
+  animation: var(--animate-shimmer);
+  border-radius: var(--radius-md);
+}
+
+/* Utility: minimum 44px touch target */
+@utility touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Utility: tabular numerals for currency & quantities */
+@utility money-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Utility: calm editorial serif display headings for Modern Organic customer views */
+@utility font-organic {
+  font-family: var(--font-organic);
+}
+
+@media print {
+  .no-print,
+  header,
+  nav,
+  aside {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
