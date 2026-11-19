@@ -99,4 +99,13 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
 				.body(baseBody("Payment provider error. Please try again"));
 	}
+
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex, HttpServletRequest req) {
+		if (sentryReporter != null) {
+			sentryReporter.captureException("INTERNAL_SERVER_ERROR", req != null ? req.getRequestURI() : "/api", ex);
+		}
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(baseBody("An unexpected server error occurred. Please try again later."));
+	}
 }

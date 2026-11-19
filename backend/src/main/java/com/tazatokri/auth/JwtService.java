@@ -8,6 +8,8 @@ import java.util.List;
 
 import javax.crypto.SecretKey;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -21,11 +23,23 @@ import io.jsonwebtoken.security.Keys;
 @Service
 public class JwtService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+    public static final String DEFAULT_DEV_SECRET = "tazatokri-dev-secret-change-me-in-production-0123456789";
+
     private final SecretKey key;
     private final long expirationMinutes;
 
     public JwtService(@Value("${app.jwt.secret}") String secret,
                       @Value("${app.jwt.expiration-minutes}") long expirationMinutes) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("CRITICAL SECURITY ERROR: app.jwt.secret must not be empty or null.");
+        }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("CRITICAL SECURITY ERROR: app.jwt.secret must be at least 32 bytes (256 bits) for HMAC-SHA256.");
+        }
+        if (DEFAULT_DEV_SECRET.equals(secret)) {
+            log.warn("SECURITY WARNING: Using default development JWT secret! Set JWT_SECRET in production.");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMinutes = expirationMinutes;
     }

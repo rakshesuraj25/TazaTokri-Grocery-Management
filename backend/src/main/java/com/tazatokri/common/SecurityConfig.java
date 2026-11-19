@@ -47,6 +47,11 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.deny())
+                .contentTypeOptions(org.springframework.security.config.Customizer.withDefaults())
+            )
+
             .authorizeHttpRequests(auth -> auth
 
                 .requestMatchers("/api/ping/**").permitAll()

@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { ListSkeleton } from '@/components/Skeletons'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useCartStore } from '@/features/cart/store'
+import { useAuthStore } from '@/features/auth/store'
 import { usePublicVegetables } from '@/features/catalog/hooks'
 import { SaveCurrentBasketDialog } from '@/features/baskets/components/SaveCurrentBasketDialog'
 import { CustomerOrderWhatsAppBar } from '@/features/notifications/components/CustomerOrderWhatsAppBar'
@@ -44,6 +45,33 @@ declare global {
   }
 }
 
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false)
+      return
+    }
+    if (window.Razorpay) {
+      resolve(true)
+      return
+    }
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
+    )
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true))
+      existing.addEventListener('error', () => resolve(false))
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
+
 export default function CustomerOrderDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -60,6 +88,7 @@ export default function CustomerOrderDetailPage() {
   const startPay = useStartOnlinePayment()
   const verifyPay = useVerifyOnlinePayment()
   const addItem = useCartStore((s) => s.addItem)
+  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     if (polling && orderQuery.data && orderQuery.data.status !== 'PENDING_PAYMENT') {
@@ -81,8 +110,18 @@ export default function CustomerOrderDetailPage() {
 
   const order = orderQuery.data
 
-  const handlePayNow = () => {
+  const handlePayNow = async () => {
     setPayError(null)
+    const isLoaded = await loadRazorpayScript()
+    if (!isLoaded && !window.Razorpay) {
+      setPayError(
+        t('checkout.gatewaySdkLoadError', {
+          defaultValue: 'Unable to load payment gateway SDK. Please check your internet connection.',
+        }),
+      )
+      return
+    }
+
     startPay.mutate(order.id, {
       onSuccess: (init) => {
         if (window.Razorpay) {
@@ -92,6 +131,19 @@ export default function CustomerOrderDetailPage() {
             currency: init.currency,
             order_id: init.razorpayOrderId,
             name: 'TazaTokri',
+            description: `Payment for Order #${order.id}`,
+            prefill: {
+              name: user?.fullName,
+              contact: user?.phone,
+            },
+            theme: {
+              color: '#2F6B45',
+            },
+            modal: {
+              ondismiss: () => {
+                setPolling(false)
+              },
+            },
             handler: (res: RazorpaySuccessPayload) => {
               setPolling(true)
               verifyPay.mutate({

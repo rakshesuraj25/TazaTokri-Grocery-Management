@@ -3,34 +3,88 @@ services:
     image: mysql:8.4
     container_name: tazatokri-mysql
     restart: unless-stopped
+    command: --default-time-zone='+05:30'
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: tazatokri
-      MYSQL_USER: tazatokri_app
-      MYSQL_PASSWORD: choose-a-long-password
-    ports:
-      - "3306:3306"
+      TZ: Asia/Kolkata
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-tazatokri}
+      MYSQL_USER: ${DB_APP_USER:-tazatokri_app}
+      MYSQL_PASSWORD: ${DB_APP_PASSWORD}
+    expose:
+      - "3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - tazatokri-internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tazatokri-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Asia/Kolkata
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-tazatokri}?serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: ${DB_APP_USER:-tazatokri_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      SPRING_FLYWAY_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      BOOTSTRAP_OWNER_NAME: ${BOOTSTRAP_OWNER_NAME:-TazaTokri Owner}
+      BOOTSTRAP_OWNER_PHONE: ${BOOTSTRAP_OWNER_PHONE:-9999999999}
+      BOOTSTRAP_OWNER_PASSWORD: ${BOOTSTRAP_OWNER_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:-}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-LOCAL}
+      STORAGE_LOCAL_DIR: /app/data/private-uploads
+      BACKUP_STATUS_FILE: /app/data/backups/backup-status.json
+    volumes:
+      - backend_uploads:/app/data/private-uploads
+      - backend_backups:/app/data/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - tazatokri-internal
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8080
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: tazatokri-frontend
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "80:80"
     depends_on:
-      mysql:
-        condition: service_healthy
+      - backend
+    networks:
+      - tazatokri-internal
 
 volumes:
   mysql_data:
+  backend_uploads:
+  backend_backups:
+
+networks:
+  tazatokri-internal:
+    driver: bridge

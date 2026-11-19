@@ -1,8 +1,8 @@
 ﻿{
-    "timestamp":  "2026-11-18T23:54:29+05:30",
-    "sha256":  "e3795f504fe4063b509c76984c881071316706277de0ee9a07253a44a5d8c41d",
+    "timestamp":  "2026-11-19T22:15:08+05:30",
+    "sha256":  "73e62ff2a15bdaf81e77881d5ef44f42eb7e5ad07596dd5ad986e1dd65093a2d",
     "retentionDays":  14,
-    "fileName":  "tazatokri_backup_20261118_235429.sql",
+    "fileName":  "tazatokri_backup_20261119_221508.sql",
     "status":  "SUCCESS",
     "fileSizeBytes":  21384
 }

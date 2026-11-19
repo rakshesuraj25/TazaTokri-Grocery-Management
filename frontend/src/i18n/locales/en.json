@@ -182,7 +182,8 @@
     "paymentExpires": "Payment expires in {{time}}",
     "pendingPayment": "Waiting for payment...",
     "pollTimeout": "Payment not confirmed. Check your orders later.",
-    "onlineUnavailableNow": "Online payment is not available right now"
+    "onlineUnavailableNow": "Online payment is not available right now",
+    "gatewaySdkLoadError": "Unable to load payment gateway SDK. Please check your internet connection and try again."
   },
   "orders": {
     "title": "My Orders",

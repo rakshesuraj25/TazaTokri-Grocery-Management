@@ -12,6 +12,7 @@ RUN ./mvnw package -DskipTests -B
 # Stage 2: Hardened Non-Root JRE Runtime
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+ENV TZ=Asia/Kolkata
 
 RUN addgroup -S -g 1001 tazatokri && adduser -S -u 1001 -G tazatokri tazatokri \
     && mkdir -p /app/data/private-uploads /app/data/backups \

@@ -20,12 +20,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import com.tazatokri.auth.JwtService;
+import com.tazatokri.common.GlobalExceptionHandler;
 import com.tazatokri.ai.AiAssistantService;
 import com.tazatokri.ai.AiDtos.PurchaseInvoiceDraftDto;
 import com.tazatokri.ai.AiDtos.QuickSaleDraftDto;
@@ -1791,5 +1801,280 @@ class TazatokriBackendApplicationTests {
         assertFalse(reporter.isEnabled());
         var ev = reporter.captureException("TEST_CAT", "/api/test", new RuntimeException("token=secret999"));
         assertFalse(ev.scrubbedMessage().contains("secret999"));
+    }
+
+    @Test
+    void phase5ProductionLaunchReadinessAndRealWorldValidation() throws Exception {
+        // --- 1. Concurrency & Contention Stress Test (25 Concurrent Requests) ---
+        Vegetable tomato = new Vegetable();
+        setId(tomato, 50L);
+        tomato.setNameEn("Tomato");
+        tomato.setBaseUnit(UnitType.KG);
+        tomato.setActive(true);
+        tomato.setAvailable(true);
+
+        User customer = new User();
+        setId(customer, 88L);
+        customer.setFullName("Concurrent Buyer");
+        customer.setPhone("9111122222");
+
+        List<StockMovement> ledger = Collections.synchronizedList(new ArrayList<>());
+        AtomicLong movSeq = new AtomicLong(1);
+
+        StockMovementRepository movementRepo = stub(StockMovementRepository.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case "currentStock": {
+                    Long vegId = (Long) args[0];
+                    synchronized (ledger) {
+                        return ledger.stream()
+                                .filter(m -> m.getVegetable().getId().equals(vegId))
+                                .map(StockMovement::getQuantity)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    }
+                }
+                case "save": {
+                    StockMovement m = (StockMovement) args[0];
+                    setId(m, movSeq.getAndIncrement());
+                    Field createdAtField = StockMovement.class.getDeclaredField("createdAt");
+                    createdAtField.setAccessible(true);
+                    if (createdAtField.get(m) == null) {
+                        createdAtField.set(m, LocalDateTime.now());
+                    }
+                    synchronized (ledger) {
+                        ledger.add(m);
+                    }
+                    return m;
+                }
+                default:
+                    throw new UnsupportedOperationException(method.getName());
+            }
+        });
+
+        VegetableRepository vegRepo = stub(VegetableRepository.class, (proxy, method, args) -> {
+            if ("findByIdForUpdate".equals(method.getName()) || "findById".equals(method.getName())) {
+                Long id = (Long) args[0];
+                return id.equals(50L) ? Optional.of(tomato) : Optional.empty();
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+
+        UserRepository userRepo = stub(UserRepository.class, (proxy, method, args) -> {
+            if ("findByPhone".equals(method.getName())) {
+                return Optional.of(customer);
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+
+        InventoryService inventoryService = new InventoryService(movementRepo, vegRepo, userRepo);
+
+        // Seed exactly 10.000 KG stock
+        inventoryService.record(50L, MovementType.PURCHASE, new BigDecimal("10.000"), "Wholesale purchase", "PURCHASE", 1L, "9111122222");
+        assertEquals(new BigDecimal("10.000"), inventoryService.currentStock(50L));
+
+        // Launch 25 concurrent threads simultaneously trying to deduct 1.000 KG each
+        int threadCount = 25;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch endGate = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+        List<Long> latenciesMs = Collections.synchronizedList(new ArrayList<>());
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startGate.await();
+                    long t0 = System.nanoTime();
+                    synchronized (tomato) { // simulate pessimistic row lock
+                        inventoryService.record(50L, MovementType.SHOP_SALE, new BigDecimal("1.000"), "POS item", "SALE", 100L, "9111122222");
+                    }
+                    long t1 = System.nanoTime();
+                    latenciesMs.add((t1 - t0) / 1_000_000);
+                    successCount.incrementAndGet();
+                } catch (InsufficientStockException e) {
+                    failureCount.incrementAndGet();
+                } catch (Exception e) {
+                    // unexpected
+                } finally {
+                    endGate.countDown();
+                }
+            });
+        }
+
+        startGate.countDown();
+        endGate.await();
+        executor.shutdown();
+
+        // Exactly 10 orders succeed and 15 fail due to stock depletion
+        assertEquals(10, successCount.get());
+        assertEquals(15, failureCount.get());
+        assertEquals(new BigDecimal("0.000"), inventoryService.currentStock(50L));
+
+        // --- 2. Wastage Cap Validation ---
+        // Restock 5.000 KG
+        inventoryService.record(50L, MovementType.PURCHASE, new BigDecimal("5.000"), "Wholesale restock", "PURCHASE", 2L, "9111122222");
+        assertEquals(new BigDecimal("5.000"), inventoryService.currentStock(50L));
+
+        // Wastage exceeding stock is rejected
+        assertThrows(InsufficientStockException.class, () ->
+                inventoryService.record(50L, MovementType.WASTAGE, new BigDecimal("6.000"), "Rotten", "WASTAGE", null, "9111122222"));
+
+        // Wastage up to available stock succeeds
+        inventoryService.record(50L, MovementType.WASTAGE, new BigDecimal("5.000"), "Heat damage", "WASTAGE", null, "9111122222");
+        assertEquals(new BigDecimal("0.000"), inventoryService.currentStock(50L));
+
+        // --- 3. Global Exception Handler Security & Information Leakage Prevention ---
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(null);
+        var errResponse = handler.handleGenericException(new RuntimeException("SQL syntax error near SELECT * FROM secret_table"), null);
+        assertEquals(500, errResponse.getStatusCode().value());
+        assertNotNull(errResponse.getBody());
+        assertEquals("An unexpected server error occurred. Please try again later.", errResponse.getBody().get("message"));
+        assertFalse(errResponse.getBody().toString().contains("secret_table"));
+        assertFalse(errResponse.getBody().toString().contains("SQL syntax error"));
+
+        // --- 4. JWT Dev Secret Validation & Token Expiry ---
+        JwtService jwtService = new JwtService(JwtService.DEFAULT_DEV_SECRET, 60);
+        User testUser = new User();
+        setId(testUser, 99L);
+        testUser.setPhone("9988776655");
+        testUser.setRoles(Set.of(Role.CUSTOMER));
+
+        String token = jwtService.generateToken(testUser);
+        assertNotNull(token);
+        assertTrue(jwtService.isValid(token));
+        assertFalse(jwtService.isValid("forged.fake.token"));
+        assertEquals("9988776655", jwtService.parseToken(token).getSubject());
+    }
+
+    // =========================================================================
+    // PHASE 6A: PRODUCTION HARDENING & IST TIMEZONE BOUNDARY VERIFICATION
+    // =========================================================================
+
+    @Test
+    void phase6aTimezoneCutoffAndDailyReportIstBoundaries() {
+        // --- 1. Delivery 18:00 IST Cutoff Rule Verification ---
+        DeliveryRules deliveryRules = new DeliveryRules(
+                List.of("411026", "411039"),
+                new BigDecimal("150.00"),
+                new BigDecimal("30.00"),
+                new BigDecimal("300.00"),
+                "18:00"
+        );
+
+        // Before 18:00 cutoff (17:59:59) -> Same-day delivery
+        LocalDateTime orderSameDay = LocalDateTime.of(2026, 11, 20, 17, 59, 59);
+        assertEquals(LocalDate.of(2026, 11, 20), deliveryRules.deliveryDateFor(orderSameDay));
+
+        // Exactly at 18:00:00 cutoff -> Next-day delivery
+        LocalDateTime orderAtCutoff = LocalDateTime.of(2026, 11, 20, 18, 0, 0);
+        assertEquals(LocalDate.of(2026, 11, 21), deliveryRules.deliveryDateFor(orderAtCutoff));
+
+        // After 18:00 cutoff (18:00:01) -> Next-day delivery
+        LocalDateTime orderAfterCutoff = LocalDateTime.of(2026, 11, 20, 18, 0, 1);
+        assertEquals(LocalDate.of(2026, 11, 21), deliveryRules.deliveryDateFor(orderAfterCutoff));
+
+        // Late evening (23:59:59) -> Next-day delivery
+        LocalDateTime orderLateNight = LocalDateTime.of(2026, 11, 20, 23, 59, 59);
+        assertEquals(LocalDate.of(2026, 11, 21), deliveryRules.deliveryDateFor(orderLateNight));
+
+        // --- 2. Daily Report Date Boundary Verification in Asia/Kolkata (UTC+05:30) ---
+        java.time.ZoneId ist = java.time.ZoneId.of("Asia/Kolkata");
+        LocalDate targetDay = LocalDate.of(2026, 11, 20);
+
+        // 2026-11-20 00:00:00 IST corresponds exactly to 2026-11-19 18:30:00 UTC
+        java.time.ZonedDateTime istMidnight = targetDay.atStartOfDay(ist);
+        assertEquals(java.time.Instant.parse("2026-11-19T18:30:00Z"), istMidnight.toInstant());
+
+        // Instant 1 second prior (18:29:59 UTC) belongs to previous IST day (2026-11-19)
+        java.time.Instant prevDayInstant = java.time.Instant.parse("2026-11-19T18:29:59Z");
+        assertEquals(LocalDate.of(2026, 11, 19), prevDayInstant.atZone(ist).toLocalDate());
+
+        // Instant at 18:30:00 UTC belongs to target IST day (2026-11-20)
+        java.time.Instant startDayInstant = java.time.Instant.parse("2026-11-19T18:30:00Z");
+        assertEquals(LocalDate.of(2026, 11, 20), startDayInstant.atZone(ist).toLocalDate());
+
+        // Instant at end of target IST day (18:29:59 UTC next day) belongs to target IST day (2026-11-20)
+        java.time.Instant endDayInstant = java.time.Instant.parse("2026-11-20T18:29:59Z");
+        assertEquals(LocalDate.of(2026, 11, 20), endDayInstant.atZone(ist).toLocalDate());
+
+        // Instant at 18:30:00 UTC next day belongs to 2026-11-21 in IST
+        java.time.Instant nextDayInstant = java.time.Instant.parse("2026-11-20T18:30:00Z");
+        assertEquals(LocalDate.of(2026, 11, 21), nextDayInstant.atZone(ist).toLocalDate());
+    }
+
+    @Test
+    void phase6aProductionHardeningProfileValidation() {
+        // --- 1. Verify Production profile rejects insecure or missing configurations ---
+        Map<String, String> validProdProps = new LinkedHashMap<>();
+        validProdProps.put("spring.datasource.password", "SuperSecureProdPassword#2026");
+        validProdProps.put("spring.flyway.password", "StrongFlywayRootPass#9988");
+        validProdProps.put("app.jwt.secret", "a-very-long-and-secure-production-jwt-token-secret-key-32bytes");
+        validProdProps.put("app.bootstrap.owner-password", "StrongOwnerPass@2026#!");
+        validProdProps.put("app.cors.allowed-origins", "https://tazatokri.com");
+
+        // Helper to create mock environment with active profile
+        java.util.function.BiFunction<String, Map<String, String>, org.springframework.core.env.Environment> createEnv =
+                (profile, props) -> (org.springframework.core.env.Environment) java.lang.reflect.Proxy.newProxyInstance(
+                        org.springframework.core.env.Environment.class.getClassLoader(),
+                        new Class<?>[]{org.springframework.core.env.Environment.class},
+                        (p, m, a) -> {
+                            if ("getActiveProfiles".equals(m.getName())) return new String[]{profile};
+                            if ("getProperty".equals(m.getName()) && a != null && a.length > 0) return props.get(a[0]);
+                            return null;
+                        });
+
+        // Valid prod config passes cleanly
+        org.springframework.core.env.Environment validEnv = createEnv.apply("prod", validProdProps);
+        com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(validEnv);
+
+        // A. Reject default DB App Password in prod
+        Map<String, String> badDbPass = new LinkedHashMap<>(validProdProps);
+        badDbPass.put("spring.datasource.password", "choose-a-long-password");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", badDbPass)));
+
+        // B. Reject default Flyway Password in prod
+        Map<String, String> badFlywayPass = new LinkedHashMap<>(validProdProps);
+        badFlywayPass.put("spring.flyway.password", "root");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", badFlywayPass)));
+
+        // C. Reject default dev JWT secret in prod
+        Map<String, String> devJwtSecret = new LinkedHashMap<>(validProdProps);
+        devJwtSecret.put("app.jwt.secret", "tazatokri-dev-secret-change-me-in-production-0123456789");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", devJwtSecret)));
+
+        // D. Reject short JWT secret (< 32 bytes) in prod
+        Map<String, String> shortJwtSecret = new LinkedHashMap<>(validProdProps);
+        shortJwtSecret.put("app.jwt.secret", "short-secret-key-16b");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", shortJwtSecret)));
+
+        // E. Reject default bootstrap Owner@123 password in prod
+        Map<String, String> devOwnerPass = new LinkedHashMap<>(validProdProps);
+        devOwnerPass.put("app.bootstrap.owner-password", "Owner@123");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", devOwnerPass)));
+
+        // F. Reject missing CORS configuration in prod
+        Map<String, String> missingCors = new LinkedHashMap<>(validProdProps);
+        missingCors.remove("app.cors.allowed-origins");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", missingCors)));
+
+        // --- 2. In dev profile, dev placeholders do NOT cause an exception ---
+        Map<String, String> devProps = new LinkedHashMap<>();
+        devProps.put("spring.datasource.password", "choose-a-long-password");
+        devProps.put("spring.flyway.password", "root");
+        devProps.put("app.jwt.secret", "tazatokri-dev-secret-change-me-in-production-0123456789");
+        devProps.put("app.bootstrap.owner-password", "Owner@123");
+        devProps.put("app.cors.allowed-origins", "http://localhost:5173");
+        org.springframework.core.env.Environment devEnv = createEnv.apply("dev", devProps);
+        com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(devEnv);
+
+        // --- 3. JwtService constructor enforces 32-byte secret length unconditionally ---
+        assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("short-secret-key", 60));
+        assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("", 60));
     }
 }
