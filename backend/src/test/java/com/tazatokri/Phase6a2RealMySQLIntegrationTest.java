@@ -181,7 +181,7 @@ public class Phase6a2RealMySQLIntegrationTest {
                     + "VALUES (" + testVegId + ", 'Concurrency Test Tomato', 'टोमॅटो', 'टमाटर', 9991, 'KG', 1, 1, NOW(), NOW())");
 
             // Inward initial purchase: exactly 10.000 KG
-            stmt.executeUpdate("INSERT INTO stock_movements (vegetable_id, type, quantity, reference_type, note, user_id, created_at) "
+            stmt.executeUpdate("INSERT INTO stock_movements (vegetable_id, type, quantity, reference_type, note, created_by, created_at) "
                     + "VALUES (" + testVegId + ", 'PURCHASE', 10.000, 'PURCHASE', 'Initial 10kg Inward', " + testUserId + ", NOW())");
 
             // Verify starting stock is 10.000
@@ -242,7 +242,7 @@ public class Phase6a2RealMySQLIntegrationTest {
                             }
 
                             // 4. Deduct stock
-                            stmt.executeUpdate("INSERT INTO stock_movements (vegetable_id, type, quantity, reference_type, note, user_id, created_at) "
+                            stmt.executeUpdate("INSERT INTO stock_movements (vegetable_id, type, quantity, reference_type, note, created_by, created_at) "
                                     + "VALUES (" + testVegId + ", 'ONLINE_SALE', -" + deductionPerThread + ", 'ORDER', 'Concurrent order #" + threadId + "', " + testUserId + ", NOW())");
 
                             conn.commit(); // Release lock and commit deduction
