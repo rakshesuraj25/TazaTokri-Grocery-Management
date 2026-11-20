@@ -110,7 +110,11 @@ public class Phase6a2RealMySQLIntegrationTest {
 
         var migrationResult = flyway.migrate();
         System.out.println("Flyway Migrations Executed: " + migrationResult.migrationsExecuted);
-        System.out.println("Target Schema Version:      " + migrationResult.targetSchemaVersion);
+        var currentInfo = flyway.info().current();
+        assertNotNull(currentInfo, "Current Flyway schema migration info must not be null");
+        String currentVersion = currentInfo.getVersion().getVersion();
+        System.out.println("Current Schema Version:     " + currentVersion);
+        assertEquals("4", currentVersion, "Database must be migrated to schema version 4");
 
         // Verify flyway_schema_history records
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
@@ -134,7 +138,7 @@ public class Phase6a2RealMySQLIntegrationTest {
                     "users", "user_roles", "addresses", "orders", "order_items",
                     "stock_movements", "sales", "sale_items", "suppliers", "purchases", "purchase_items",
                     "combos", "combo_items", "saved_baskets", "delivery_attempts", "delivery_otps",
-                    "delivery_evidence", "delivery_audit_log"
+                    "delivery_evidences", "delivery_audit_logs"
             );
 
             for (String tbl : expectedTables) {
@@ -173,8 +177,8 @@ public class Phase6a2RealMySQLIntegrationTest {
             stmt.executeUpdate("INSERT INTO users (id, phone, full_name, password_hash, active, created_at) "
                     + "VALUES (" + testUserId + ", '9999999991', 'Test Concurrency User', '$2a$10$xyz', 1, NOW())");
             stmt.executeUpdate("INSERT INTO categories (id, name, active) VALUES (9991, 'Test Cat', 1)");
-            stmt.executeUpdate("INSERT INTO vegetables (id, name_en, name_mr, name_hi, category_id, base_unit, active, available) "
-                    + "VALUES (" + testVegId + ", 'Concurrency Test Tomato', 'टोमॅटो', 'टमाटर', 9991, 'KG', 1, 1)");
+            stmt.executeUpdate("INSERT INTO vegetables (id, name_en, name_mr, name_hi, category_id, base_unit, active, available, created_at, updated_at) "
+                    + "VALUES (" + testVegId + ", 'Concurrency Test Tomato', 'टोमॅटो', 'टमाटर', 9991, 'KG', 1, 1, NOW(), NOW())");
 
             // Inward initial purchase: exactly 10.000 KG
             stmt.executeUpdate("INSERT INTO stock_movements (vegetable_id, type, quantity, reference_type, note, user_id, created_at) "
