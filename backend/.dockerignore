@@ -1,0 +1,15 @@
+target/
+backups/
+data/
+.git/
+.settings/
+.project
+.classpath
+.factorypath
+*.log
+.env
+.env.*
+*.sql
+effective-pom.xml
+junit-debug.txt
+test-classpath.txt

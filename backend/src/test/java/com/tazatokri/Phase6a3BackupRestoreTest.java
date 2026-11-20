@@ -53,7 +53,7 @@ public class Phase6a3BackupRestoreTest {
     private static final String RESTORE_URL = "jdbc:mysql://localhost:3307/" + RESTORE_DB
             + "?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata";
 
-    private static final Path BACKUP_DIR = Paths.get("C:/Taza_Tokri/backups/phase6a3");
+    private static final Path BACKUP_DIR = Paths.get("C:/Taza_Tokri/backend/backups/phase6a3");
     private static final Path BACKUP_FILE = BACKUP_DIR.resolve("tazatokri_phase6a3_backup.sql");
 
     private Connection getSourceConnection() throws Exception {

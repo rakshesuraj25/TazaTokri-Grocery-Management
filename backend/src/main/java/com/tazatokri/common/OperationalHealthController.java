@@ -64,11 +64,22 @@ public class OperationalHealthController {
 	}
 
 	/**
-	 * Public liveness/readiness probe for load balancers & Docker healthchecks.
-	 * Never exposes sensitive environment variables or database credentials.
+	 * Public liveness probe for container healthchecks.
+	 * Verifies only that the Spring Boot application process is responding (independent of MySQL).
 	 */
-	@GetMapping({ "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness" })
-	public ResponseEntity<Map<String, String>> actuatorHealth() {
+	@GetMapping("/actuator/health/liveness")
+	public ResponseEntity<Map<String, String>> liveness() {
+		Map<String, String> body = new LinkedHashMap<>();
+		body.put("status", "UP");
+		return ResponseEntity.ok(body);
+	}
+
+	/**
+	 * Public readiness & aggregate health probe for load balancers & orchestrators.
+	 * Checks required MySQL connectivity without exposing credentials, SQL, or stack traces.
+	 */
+	@GetMapping({ "/actuator/health", "/actuator/health/readiness" })
+	public ResponseEntity<Map<String, String>> readiness() {
 		boolean dbUp = checkDatabaseConnectivity();
 		Map<String, String> body = new LinkedHashMap<>();
 		body.put("status", dbUp ? "UP" : "DOWN");

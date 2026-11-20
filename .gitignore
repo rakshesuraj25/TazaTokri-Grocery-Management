@@ -12,3 +12,8 @@ test-results/
 .vscode/
 .DS_Store
 Thumbs.db
+infra/certs/
+infra/certbot/
+backend/data/
+*.sql.gz
+*.sql.gz.enc

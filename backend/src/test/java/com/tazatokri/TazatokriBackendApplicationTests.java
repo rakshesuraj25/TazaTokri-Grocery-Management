@@ -2078,6 +2078,135 @@ class TazatokriBackendApplicationTests {
         // --- 3. JwtService constructor enforces 32-byte secret length unconditionally ---
         assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("short-secret-key", 60));
         assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("", 60));
+
+        // --- 4. Phase 6B.1: Wildcard CORS, PLACEHOLDER_ secrets, Razorpay validation & LogScrubber ---
+        Map<String, String> wildcardCors = new LinkedHashMap<>(validProdProps);
+        wildcardCors.put("app.cors.allowed-origins", "*");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", wildcardCors)));
+
+        Map<String, String> placeholderSecret = new LinkedHashMap<>(validProdProps);
+        placeholderSecret.put("app.jwt.secret", "PLACEHOLDER_STRONG_JWT_SECRET_MIN_32_CHARS_LONG");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", placeholderSecret)));
+
+        // COD-only mode (no Razorpay keys) passes cleanly in prod
+        com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", validProdProps));
+
+        // Partial Razorpay config (missing webhook secret) fails in prod
+        Map<String, String> partialRazorpay = new LinkedHashMap<>(validProdProps);
+        partialRazorpay.put("app.razorpay.key-id", "rzp_live_1234567890");
+        partialRazorpay.put("app.razorpay.key-secret", "super-secret-razorpay-key");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", partialRazorpay)));
+
+        // Explicitly enabled Razorpay without credentials fails in prod
+        Map<String, String> enabledNoKeysRazorpay = new LinkedHashMap<>(validProdProps);
+        enabledNoKeysRazorpay.put("app.razorpay.enabled", "true");
+        assertThrows(IllegalStateException.class, () ->
+                com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", enabledNoKeysRazorpay)));
+
+        // Complete Razorpay configuration passes in prod
+        Map<String, String> fullRazorpay = new LinkedHashMap<>(partialRazorpay);
+        fullRazorpay.put("app.razorpay.webhook-secret", "super-secret-webhook-key");
+        com.tazatokri.common.ProductionSecurityHardeningValidator.validateConfiguration(createEnv.apply("prod", fullRazorpay));
+
+        // LogScrubber redacts Razorpay keys and secrets
+        String scrubbed = LogScrubber.scrub("key=rzp_live_secret123 token=mySecretToken123 Bearer abc.def.ghi");
+        assertFalse(scrubbed.contains("rzp_live_secret123"));
+        assertFalse(scrubbed.contains("mySecretToken123"));
+        assertFalse(scrubbed.contains("abc.def.ghi"));
+        assertTrue(scrubbed.contains("[REDACTED_RAZORPAY_KEY]"));
+        assertTrue(scrubbed.contains("[REDACTED_JWT]"));
+    }
+
+    @Test
+    void phase6b63StructuredLoggingScrubberAndConverters() {
+        // 1. LogScrubber protects Authorization, Cookie, Set-Cookie, Bearer, JSON/KV secrets while keeping business IDs intact
+        String raw = "Order #98765 amount=190.00 Authorization: Bearer my-opaque-jwt-123 Cookie: JSESSIONID=xyz987 Set-Cookie: session=abc \"webhookSecret\":\"whsec_secret\"";
+        String scrubbed = LogScrubber.scrub(raw);
+        assertTrue(scrubbed.contains("Order #98765"));
+        assertTrue(scrubbed.contains("amount=190.00"));
+        assertFalse(scrubbed.contains("my-opaque-jwt-123"));
+        assertFalse(scrubbed.contains("JSESSIONID=xyz987"));
+        assertFalse(scrubbed.contains("session=abc"));
+        assertFalse(scrubbed.contains("whsec_secret"));
+        assertEquals(null, LogScrubber.scrub(null));
+
+        // 2. ScrubbingMessageConverter & ScrubbingThrowableProxyConverter with Logback 1.5
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("com.tazatokri.LoggingTest");
+        RuntimeException ex = new IllegalStateException("Gateway failed with password=SuperSecret99");
+        ch.qos.logback.classic.spi.LoggingEvent event = new ch.qos.logback.classic.spi.LoggingEvent(
+                "com.tazatokri.LoggingTest", logger, ch.qos.logback.classic.Level.ERROR,
+                "Failed with Bearer secret-token-xyz", ex, null);
+
+        com.tazatokri.common.ScrubbingMessageConverter msgConv = new com.tazatokri.common.ScrubbingMessageConverter();
+        msgConv.start();
+        String msgOut = msgConv.convert(event);
+        assertFalse(msgOut.contains("secret-token-xyz"));
+        assertTrue(msgOut.contains("[REDACTED_JWT]"));
+        msgConv.stop();
+
+        com.tazatokri.common.ScrubbingThrowableProxyConverter exConv = new com.tazatokri.common.ScrubbingThrowableProxyConverter();
+        exConv.start();
+        String exOut = exConv.convert(event);
+        assertTrue(exOut.contains("IllegalStateException"));
+        assertTrue(exOut.contains("TazatokriBackendApplicationTests"));
+        assertFalse(exOut.contains("SuperSecret99"));
+        assertTrue(exOut.contains("[REDACTED]"));
+        exConv.stop();
+    }
+
+    @Test
+    void phase6b65LivenessAndReadinessHealthSeparation() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger dbCalls = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        // 1. Failing DataSource (simulates MySQL outage with sensitive message that must NOT leak)
+        javax.sql.DataSource downDs = (javax.sql.DataSource) Proxy.newProxyInstance(
+                javax.sql.DataSource.class.getClassLoader(),
+                new Class<?>[]{javax.sql.DataSource.class},
+                (p, m, a) -> {
+                    if ("getConnection".equals(m.getName())) {
+                        dbCalls.incrementAndGet();
+                        throw new java.sql.SQLException("Access denied for user 'tazatokri_app'@'172.18.0.3' password=secret");
+                    }
+                    return null;
+                });
+
+        com.tazatokri.common.OperationalHealthController downCtrl =
+                new com.tazatokri.common.OperationalHealthController(
+                        downDs, null, null, null, null, null, "0.4.0", "", "");
+
+        // Liveness must return 200 UP WITHOUT touching DataSource
+        var liveResp = downCtrl.liveness();
+        assertEquals(200, liveResp.getStatusCode().value());
+        assertEquals("UP", liveResp.getBody().get("status"));
+        assertEquals(0, dbCalls.get(), "Liveness must not invoke DataSource");
+
+        // Readiness & aggregate /actuator/health must return 503 DOWN without leaking SQL/credentials
+        var readyDown = downCtrl.readiness();
+        assertEquals(503, readyDown.getStatusCode().value());
+        assertEquals(1, readyDown.getBody().size());
+        assertEquals("DOWN", readyDown.getBody().get("status"));
+
+        // 2. Healthy DataSource (conn.isValid(2) == true)
+        java.sql.Connection validConn = (java.sql.Connection) Proxy.newProxyInstance(
+                java.sql.Connection.class.getClassLoader(),
+                new Class<?>[]{java.sql.Connection.class},
+                (p, m, a) -> "isValid".equals(m.getName()) ? Boolean.TRUE : null);
+        javax.sql.DataSource upDs = (javax.sql.DataSource) Proxy.newProxyInstance(
+                javax.sql.DataSource.class.getClassLoader(),
+                new Class<?>[]{javax.sql.DataSource.class},
+                (p, m, a) -> "getConnection".equals(m.getName()) ? validConn : null);
+
+        com.tazatokri.common.OperationalHealthController upCtrl =
+                new com.tazatokri.common.OperationalHealthController(
+                        upDs, null, null, null, null, null, "0.4.0", "", "");
+
+        var readyUp = upCtrl.readiness();
+        assertEquals(200, readyUp.getStatusCode().value());
+        assertEquals("UP", readyUp.getBody().get("status"));
     }
 
     // =========================================================================

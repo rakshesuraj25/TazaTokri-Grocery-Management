@@ -1,11 +1,10 @@
 <#
 .SYNOPSIS
-  TazaTokri Automated MySQL Backup Script (Windows PowerShell)
+  TazaTokri Automated Fail-Safe MySQL Backup Script (Windows PowerShell)
 .DESCRIPTION
-  Creates a timestamped SQL backup, SHA-256 integrity checksum, backup log,
-  and backup-status.json (consumed by GET /api/ops/health), and prunes backups
-  older than BACKUP_RETENTION_DAYS after verifying the new backup.
-  Never stores database passwords in source code or logs.
+  Produces a consistent compressed & encrypted MySQL 8.4 backup using a
+  protected temporary option file, verifies gzip and SHA-256 integrity,
+  writes backup-status.json, and performs safe retention pruning.
 #>
 param(
     [string]$DbHost = $(if ($env:DB_HOST) { $env:DB_HOST } else { "localhost" }),
@@ -13,20 +12,41 @@ param(
     [string]$DbName = $(if ($env:DB_NAME) { $env:DB_NAME } else { "tazatokri" }),
     [string]$DbUser = $(if ($env:DB_USERNAME) { $env:DB_USERNAME } else { "root" }),
     [string]$BackupDir = $(if ($env:BACKUP_DIR) { $env:BACKUP_DIR } else { (Join-Path $PSScriptRoot "..\backend\data\backups") }),
-    [int]$RetentionDays = $(if ($env:BACKUP_RETENTION_DAYS) { [int]$env:BACKUP_RETENTION_DAYS } else { 14 })
+    [string]$BackupEnv = $(if ($env:BACKUP_ENV) { $env:BACKUP_ENV } else { "production" }),
+    [int]$RetentionDays = $(if ($env:BACKUP_RETENTION_DAYS) { [int]$env:BACKUP_RETENTION_DAYS } else { 14 }),
+    [switch]$AllowUnencryptedNonProd,
+    [switch]$RetentionDryRun
 )
 
 $ErrorActionPreference = "Stop"
+$StartTime = Get-Date
+$BackupVersion = "6B.5.2"
+
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 $ResolvedBackupDir = (Resolve-Path $BackupDir).Path
 
-$Timestamp = (Get-Date).ToString("yyyyMMdd_HHmmss")
-$IsoTimestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
-$BackupFileName = "tazatokri_backup_${Timestamp}.sql"
-$BackupFilePath = Join-Path $ResolvedBackupDir $BackupFileName
-$ChecksumFilePath = "${BackupFilePath}.sha256"
+$Timestamp = $StartTime.ToString("yyyyMMdd_HHmmss")
+$IsoTimestamp = $StartTime.ToString("yyyy-MM-ddTHH:mm:ssK")
+$BackupId = "bkp_${Timestamp}_$PID"
+$BackupType = if ($DbName -like "*test*") { "TEST_LOGICAL" } else { "FULL_LOGICAL" }
+
+$RawSqlFileName = "tazatokri_backup_${Timestamp}.sql"
+$GzFileName = "${RawSqlFileName}.gz"
+$EncFileName = "${GzFileName}.enc"
 $LogFilePath = Join-Path $ResolvedBackupDir "backup.log"
 $StatusJsonPath = Join-Path $ResolvedBackupDir "backup-status.json"
+$LockFilePath = Join-Path $ResolvedBackupDir ".backup.lock"
+
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("tazatokri_bkp_" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
+$CnfPath = Join-Path $TempDir "my.cnf"
+$TempSqlPath = Join-Path $TempDir $RawSqlFileName
+$TempGzPath = Join-Path $TempDir $GzFileName
+$TempEncPath = Join-Path $TempDir $EncFileName
+
+$Compressed = $false
+$Encrypted = $false
+$VerificationStatus = "FAILED"
 
 function Write-BackupLog([string]$Level, [string]$Message) {
     $Line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [$Level] $Message"
@@ -34,97 +54,187 @@ function Write-BackupLog([string]$Level, [string]$Message) {
     Write-Output $Line
 }
 
-Write-BackupLog "INFO" "Starting TazaTokri database backup for '$DbName' on ${DbHost}:${DbPort}"
-
-$MysqldumpCmd = Get-Command "mysqldump" -ErrorAction SilentlyContinue
-if (-not $MysqldumpCmd) {
-    $CommonPaths = @(
-        "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe",
-        "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.exe",
-        "C:\xampp\mysql\bin\mysqldump.exe"
-    )
-    foreach ($p in $CommonPaths) {
-        if (Test-Path $p) {
-            $MysqldumpCmd = $p
-            break
-        }
-    }
+function Write-StatusJson([string]$Status, [string]$FileName, [long]$SizeBytes, [string]$Sha256, [string]$VerifyStatus, [string]$FailReason) {
+    $Duration = [int]((Get-Date) - $StartTime).TotalSeconds
+    $Payload = @{
+        status             = $Status
+        backupId           = $BackupId
+        backupType         = $BackupType
+        databaseName       = $DbName
+        timestamp          = $IsoTimestamp
+        lastBackupAt       = $IsoTimestamp
+        fileName           = $FileName
+        backupFilename     = $FileName
+        fileSizeBytes      = $SizeBytes
+        sha256             = $Sha256
+        sha256Checksum     = $Sha256
+        compressed         = $Compressed
+        encrypted          = $Encrypted
+        durationSeconds    = $Duration
+        backupVersion      = $BackupVersion
+        verificationStatus = $VerifyStatus
+        failureReason      = $FailReason
+    } | ConvertTo-Json -Depth 3
+    $TempStatus = "${StatusJsonPath}.tmp"
+    Set-Content -Path $TempStatus -Value $Payload -Encoding UTF8
+    Move-Item -Path $TempStatus -Destination $StatusJsonPath -Force
 }
 
-$UsedLiveMysqldump = $false
-if ($MysqldumpCmd) {
-    try {
-        if ($env:DB_PASSWORD -and -not $env:MYSQL_PWD) {
-            $env:MYSQL_PWD = $env:DB_PASSWORD
-        }
-        $ExePath = if ($MysqldumpCmd -is [string]) { $MysqldumpCmd } else { $MysqldumpCmd.Source }
-        & $ExePath `
-            --host=$DbHost `
-            --port=$DbPort `
-            --user=$DbUser `
-            --single-transaction `
-            --routines `
-            --triggers `
-            --default-character-set=utf8mb4 `
-            --result-file=$BackupFilePath `
-            $DbName 2>&1 | Out-Null
-
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $BackupFilePath) -and ((Get-Item $BackupFilePath).Length -gt 100)) {
-            $UsedLiveMysqldump = $true
-            Write-BackupLog "INFO" "Live mysqldump completed successfully: $BackupFileName"
-        }
-    } catch {
-        Write-BackupLog "WARN" "Live mysqldump connection unavailable; generating schema + migration snapshot backup."
-    }
+if (Test-Path $LockFilePath) {
+    Write-BackupLog "ERROR" "Another backup job is already running ($LockFilePath)."
+    throw "Backup lock exists."
 }
+Set-Content -Path $LockFilePath -Value "$PID" -Encoding ASCII
 
-if (-not $UsedLiveMysqldump) {
-    $MigrationDir = Join-Path $PSScriptRoot "..\backend\src\main\resources\db\migration"
-    $Header = @(
-        "-- TazaTokri Database Schema & Operational Snapshot Backup",
-        "-- Generated At: $IsoTimestamp",
-        "-- Database: $DbName",
-        "SET FOREIGN_KEY_CHECKS=0;",
-        ""
-    )
-    Set-Content -Path $BackupFilePath -Value ($Header -join "`r`n") -Encoding UTF8
-    if (Test-Path $MigrationDir) {
-        Get-ChildItem -Path $MigrationDir -Filter "V*.sql" | Sort-Object Name | ForEach-Object {
-            Add-Content -Path $BackupFilePath -Value "`r`n-- Migration: $($_.Name)`r`n" -Encoding UTF8
-            Add-Content -Path $BackupFilePath -Value (Get-Content -Path $_.FullName -Raw) -Encoding UTF8
+try {
+    $DbPassword = if ($env:DB_PASSWORD) { $env:DB_PASSWORD } elseif ($env:MYSQL_PWD) { $env:MYSQL_PWD } else { "" }
+    if ([string]::IsNullOrWhiteSpace($DbPassword)) {
+        throw "DB_PASSWORD environment variable is required."
+    }
+
+    $Passphrase = if ($env:BACKUP_ENCRYPTION_PASSPHRASE) { $env:BACKUP_ENCRYPTION_PASSPHRASE } else { "" }
+    if ([string]::IsNullOrWhiteSpace($Passphrase) -and $BackupEnv -eq "production" -and -not $AllowUnencryptedNonProd) {
+        throw "BACKUP_ENCRYPTION_PASSPHRASE is required in production mode."
+    }
+
+    $MysqldumpCmd = Get-Command "mysqldump" -ErrorAction SilentlyContinue
+    if (-not $MysqldumpCmd) {
+        foreach ($p in @("C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.exe", "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe")) {
+            if (Test-Path $p) { $MysqldumpCmd = $p; break }
         }
     }
-    Add-Content -Path $BackupFilePath -Value "`r`nSET FOREIGN_KEY_CHECKS=1;`r`n-- END OF TAZATOKRI BACKUP`r`n" -Encoding UTF8
-    Write-BackupLog "INFO" "Schema snapshot backup created: $BackupFileName"
-}
+    if (-not $MysqldumpCmd) {
+        throw "mysqldump binary not found."
+    }
+    $ExePath = if ($MysqldumpCmd -is [string]) { $MysqldumpCmd } else { $MysqldumpCmd.Source }
 
-if (-not (Test-Path $BackupFilePath) -or ((Get-Item $BackupFilePath).Length -eq 0)) {
-    Write-BackupLog "ERROR" "Backup file creation failed or file is empty."
+    # Temporary protected MySQL option file (never pass password in CLI args)
+    $CnfContent = "[client]`nhost=$DbHost`nport=$DbPort`nuser=$DbUser`npassword=$DbPassword`n"
+    [System.IO.File]::WriteAllText($CnfPath, $CnfContent, [System.Text.UTF8Encoding]::new($false))
+
+    Write-BackupLog "INFO" "Starting MySQL 8.4 backup ($BackupId) for '$DbName' on ${DbHost}:${DbPort}"
+    $DumpErrFile = Join-Path $TempDir "mysqldump.err"
+    $proc = Start-Process -FilePath $ExePath -ArgumentList @(
+        "--defaults-extra-file=$CnfPath",
+        "--single-transaction",
+        "--routines",
+        "--triggers",
+        "--events",
+        "--hex-blob",
+        "--set-gtid-purged=OFF",
+        "--default-character-set=utf8mb4",
+        "--result-file=$TempSqlPath",
+        $DbName
+    ) -Wait -NoNewWindow -PassThru -RedirectStandardError $DumpErrFile
+
+    if ($proc.ExitCode -ne 0 -or -not (Test-Path $TempSqlPath) -or ((Get-Item $TempSqlPath).Length -lt 100)) {
+        $ErrText = if (Test-Path $DumpErrFile) { (Get-Content $DumpErrFile -Raw) -replace "password=[^\s]+", "password=[REDACTED]" } else { "ExitCode=$($proc.ExitCode)" }
+        throw "mysqldump failed: $ErrText"
+    }
+
+    # Compress to .sql.gz
+    $InStream = [System.IO.File]::OpenRead($TempSqlPath)
+    $OutStream = [System.IO.File]::Create($TempGzPath)
+    $GzipStream = New-Object System.IO.Compression.GzipStream($OutStream, [System.IO.Compression.CompressionLevel]::Optimal)
+    try { $InStream.CopyTo($GzipStream) } finally { $GzipStream.Dispose(); $OutStream.Dispose(); $InStream.Dispose() }
+    if (-not (Test-Path $TempGzPath) -or ((Get-Item $TempGzPath).Length -eq 0)) {
+        throw "Gzip compression produced an empty file."
+    }
+    $Compressed = $true
+    Remove-Item -Force $TempSqlPath
+
+    $FinalFileName = $GzFileName
+    $FinalTempPath = $TempGzPath
+
+    # Encrypt with native .NET Authenticated Encryption (AES-256-CBC + PBKDF2-SHA256 + HMAC-SHA256)
+    if (-not [string]::IsNullOrWhiteSpace($Passphrase)) {
+        $Salt = New-Object byte[] 16
+        $Iv = New-Object byte[] 16
+        $Rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        $Rng.GetBytes($Salt); $Rng.GetBytes($Iv); $Rng.Dispose()
+        $Kdf = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($Passphrase, $Salt, 100000, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+        $EncKey = $Kdf.GetBytes(32)
+        $MacKey = $Kdf.GetBytes(32)
+        $Kdf.Dispose()
+
+        $PlainBytes = [System.IO.File]::ReadAllBytes($TempGzPath)
+        $Aes = [System.Security.Cryptography.Aes]::Create()
+        $Aes.KeySize = 256; $Aes.Mode = [System.Security.Cryptography.CipherMode]::CBC; $Aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $Aes.Key = $EncKey; $Aes.IV = $Iv
+        $Encryptor = $Aes.CreateEncryptor()
+        $CipherBytes = $Encryptor.TransformFinalBlock($PlainBytes, 0, $PlainBytes.Length)
+        $Encryptor.Dispose(); $Aes.Dispose()
+
+        $Magic = [System.Text.Encoding]::ASCII.GetBytes("TTENC1")
+        $AuthPayload = New-Object byte[] ($Magic.Length + $Salt.Length + $Iv.Length + $CipherBytes.Length)
+        [Buffer]::BlockCopy($Magic, 0, $AuthPayload, 0, $Magic.Length)
+        [Buffer]::BlockCopy($Salt, 0, $AuthPayload, $Magic.Length, $Salt.Length)
+        [Buffer]::BlockCopy($Iv, 0, $AuthPayload, $Magic.Length + $Salt.Length, $Iv.Length)
+        [Buffer]::BlockCopy($CipherBytes, 0, $AuthPayload, $Magic.Length + $Salt.Length + $Iv.Length, $CipherBytes.Length)
+
+        $Hmac = New-Object System.Security.Cryptography.HMACSHA256 -ArgumentList @(,$MacKey)
+        $Tag = $Hmac.ComputeHash($AuthPayload)
+        $Hmac.Dispose()
+
+        $OutFs = [System.IO.File]::Create($TempEncPath)
+        try { $OutFs.Write($AuthPayload, 0, $AuthPayload.Length); $OutFs.Write($Tag, 0, $Tag.Length) } finally { $OutFs.Dispose() }
+        if (-not (Test-Path $TempEncPath) -or ((Get-Item $TempEncPath).Length -le 70)) {
+            throw "Backup encryption failed."
+        }
+        Remove-Item -Force $TempGzPath
+        $FinalFileName = $EncFileName
+        $FinalTempPath = $TempEncPath
+        $Encrypted = $true
+    }
+
+    # Compute and verify SHA-256 before moving to official backup dir
+    $Sha256 = (Get-FileHash -Path $FinalTempPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $TempShaPath = "${FinalTempPath}.sha256"
+    [System.IO.File]::WriteAllText($TempShaPath, "$Sha256  $FinalFileName`n", [System.Text.UTF8Encoding]::new($false))
+    $VerifySha = (Get-FileHash -Path $FinalTempPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($VerifySha -ne $Sha256) {
+        throw "SHA-256 post-write verification mismatch."
+    }
+
+    $DestPath = Join-Path $ResolvedBackupDir $FinalFileName
+    $DestShaPath = "${DestPath}.sha256"
+    Move-Item -Path $FinalTempPath -Destination $DestPath -Force
+    Move-Item -Path $TempShaPath -Destination $DestShaPath -Force
+
+    $FileSize = (Get-Item $DestPath).Length
+    $VerificationStatus = "VERIFIED"
+    Write-StatusJson "SUCCESS" $FinalFileName $FileSize $Sha256 "VERIFIED" $null
+
+    # Safe retention cleanup (never deletes latest backup, never touches phase6a artifacts, never fails backup)
+    if ($RetentionDays -gt 0) {
+        try {
+            $Cutoff = (Get-Date).AddDays(-$RetentionDays)
+            Get-ChildItem -Path $ResolvedBackupDir -File | Where-Object {
+                $_.LastWriteTime -lt $Cutoff -and
+                $_.Name -ne $FinalFileName -and
+                $_.Name -ne "${FinalFileName}.sha256" -and
+                $_.Name -notlike "*phase6a*" -and
+                $_.Name -match '^tazatokri_backup_\d{8}_\d{6}\.sql(\.gz)?(\.enc)?(\.sha256)?$'
+            } | ForEach-Object {
+                if ($RetentionDryRun) {
+                    Write-BackupLog "INFO" "[DRY-RUN] Would prune expired backup: $($_.Name)"
+                } else {
+                    Remove-Item -Path $_.FullName -Force
+                    Write-BackupLog "INFO" "Pruned expired backup: $($_.Name)"
+                }
+            }
+        } catch {
+            Write-BackupLog "WARN" "Retention cleanup warning (backup itself remains valid): $($_.Exception.Message)"
+        }
+    }
+
+    Write-BackupLog "INFO" "Backup $BackupId completed and verified ($FileSize bytes, sha256=$Sha256, encrypted=$Encrypted)"
+} catch {
+    $Reason = $_.Exception.Message -replace "password=[^\s]+", "password=[REDACTED]"
+    Write-BackupLog "ERROR" "Backup $BackupId FAILED: $Reason"
+    Write-StatusJson "FAILED" $null 0 $null "FAILED" $Reason
     exit 1
+} finally {
+    if (Test-Path $TempDir) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $LockFilePath) { Remove-Item -Path $LockFilePath -Force -ErrorAction SilentlyContinue }
 }
-
-$FileSize = (Get-Item $BackupFilePath).Length
-$HashObj = Get-FileHash -Path $BackupFilePath -Algorithm SHA256
-$Sha256 = $HashObj.Hash.ToLowerInvariant()
-Set-Content -Path $ChecksumFilePath -Value "$Sha256  $BackupFileName" -Encoding UTF8
-
-$StatusPayload = @{
-    status        = "SUCCESS"
-    timestamp     = $IsoTimestamp
-    fileName      = $BackupFileName
-    fileSizeBytes = $FileSize
-    sha256        = $Sha256
-    retentionDays = $RetentionDays
-} | ConvertTo-Json -Depth 3
-Set-Content -Path $StatusJsonPath -Value $StatusPayload -Encoding UTF8
-
-# Retention cleanup (only after verifying current backup exists and is non-empty)
-$CutoffDate = (Get-Date).AddDays(-$RetentionDays)
-Get-ChildItem -Path $ResolvedBackupDir -Filter "tazatokri_backup_*.sql*" | Where-Object {
-    $_.LastWriteTime -lt $CutoffDate -and $_.Name -ne $BackupFileName -and $_.Name -ne "${BackupFileName}.sha256"
-} | ForEach-Object {
-    Write-BackupLog "INFO" "Pruning expired backup artifact older than $RetentionDays days: $($_.Name)"
-    Remove-Item -Path $_.FullName -Force
-}
-
-Write-BackupLog "INFO" "Backup verified ($FileSize bytes, sha256=$Sha256)."

@@ -1,6 +1,6 @@
 # TazaTokri Production Deployment Guide
 
-This guide details the steps to deploy the TazaTokri full-stack application using Docker Compose on a single Linux VPS (Ubuntu 22.04 / 24.04 LTS or Debian 12).
+This guide details the safe production deployment process for TazaTokri using Docker Compose on a single Linux VPS (Ubuntu 22.04 / 24.04 LTS or Debian 12).
 
 ---
 
@@ -13,151 +13,153 @@ This guide details the steps to deploy the TazaTokri full-stack application usin
 - **OS:** Ubuntu 22.04 LTS / 24.04 LTS
 
 ### Required Software on Host
-- **Docker Engine:** v24.0+ (`sudo apt-get install docker.io`)
-- **Docker Compose:** v2.20+ (`sudo apt-get install docker-compose-plugin`)
-- **Reverse Proxy with Automated HTTPS:** Caddy or Nginx with Certbot
-- **Firewall (UFW):** Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) open. **Do NOT open port 3306 or 8080 to the public internet.**
+- **Docker Engine:** v24.0+
+- **Docker Compose:** v2.20+ (`docker compose`)
+- **Bash, OpenSSL, gzip, sha256sum, mysqldump** (for host backup scripts if invoked outside containers)
+- **Firewall (UFW):** Open only ports `22` (SSH), `80` (HTTP redirect + ACME challenge), and `443` (HTTPS). **Do NOT expose port `3306` or `8080` to the public internet.** In `docker-compose.yml`, both `mysql` (`3306`) and `backend` (`8080`) use `expose:` on the internal `tazatokri-internal` bridge network only.
 
 ---
 
 ## 2. Pre-Deployment Configuration
 
-### Step 2.1: Clone Repository & Create Dedicated Deploy Directory
+### Step 2.1: Clone Repository & Configure `.env`
 ```bash
-git clone https://github.com/your-username/Taza_Tokri.git /opt/tazatokri
+git clone <your-repo-url> /opt/tazatokri
 cd /opt/tazatokri
-```
-
-### Step 2.2: Configure Production Environment Variables
-Copy `.env.example` to `.env`:
-```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-Generate cryptographically secure passwords and edit `.env`:
+Generate strong secrets (never commit `.env` to Git):
 ```bash
-# Generate DB App password:
-openssl rand -base64 24
-
-# Generate DB Root password:
-openssl rand -base64 24
-
-# Generate 32+ byte JWT secret:
-openssl rand -base64 32
+openssl rand -base64 24   # DB_APP_PASSWORD / DB_ROOT_PASSWORD
+openssl rand -base64 32   # JWT_SECRET (min 32 bytes for HMAC-SHA256)
+openssl rand -base64 32   # BACKUP_ENCRYPTION_PASSPHRASE (store independently offsite!)
 ```
 
-Edit `/opt/tazatokri/.env` with `nano` or `vim`:
-```ini
-DB_NAME=tazatokri
-DB_APP_USER=tazatokri_app
-DB_APP_PASSWORD=<INSERT_GENERATED_APP_PASSWORD>
-DB_ROOT_PASSWORD=<INSERT_GENERATED_ROOT_PASSWORD>
+Set required variables in `/opt/tazatokri/.env` (see `.env.example` for all optional integrations):
+- `DB_NAME=tazatokri`, `DB_APP_USER=tazatokri_app`, `DB_APP_PASSWORD`, `DB_ROOT_PASSWORD`
+- `JWT_SECRET`
+- `BOOTSTRAP_OWNER_NAME`, `BOOTSTRAP_OWNER_PHONE`, `BOOTSTRAP_OWNER_PASSWORD`
+- `CORS_ALLOWED_ORIGINS=https://your-production-domain.com` (never `*`)
+- `VITE_API_URL=` (empty for same-origin `/api/` reverse proxying)
+- `BACKUP_ENCRYPTION_PASSPHRASE` (required by `scripts/backup-mysql.sh` in production)
+- `APP_VERSION=0.4.0` (optional default; may also be passed per deployment)
 
-JWT_SECRET=<INSERT_GENERATED_32_BYTE_JWT_SECRET>
+### Step 2.2: Host Storage & Permissions Alignment
+`docker-compose.yml` isolates MySQL (`mysql_data` named volume) while bind-mounting:
+- `./backend/data/private-uploads:/app/data/private-uploads` (written by `backend` UID `1001`)
+- `./backend/data/backup-status:/app/data/backup-status:ro` (read-only metadata `backup-status.json` for `GET /api/ops/health`; encrypted archives in `./backend/data/backups/` are **never** mounted into `backend`)
 
-BOOTSTRAP_OWNER_NAME="TazaTokri Store Owner"
-BOOTSTRAP_OWNER_PHONE="9876543210"
-BOOTSTRAP_OWNER_PASSWORD=<INSERT_STRONG_INITIAL_PASSWORD>
+Create the host directories with restrictive permissions before first startup (never use `chmod 777`):
+```bash
+mkdir -p /opt/tazatokri/backend/data/private-uploads \
+         /opt/tazatokri/backend/data/backup-status \
+         /opt/tazatokri/backend/data/backups \
+         /opt/tazatokri/infra/certs \
+         /opt/tazatokri/infra/certbot/www
+sudo chown -R 1001:1001 /opt/tazatokri/backend/data/private-uploads
+chmod 750 /opt/tazatokri/backend/data/private-uploads
+chmod 755 /opt/tazatokri/backend/data/backup-status /opt/tazatokri/infra/certs /opt/tazatokri/infra/certbot/www
+chmod 700 /opt/tazatokri/backend/data/backups
+```
 
-CORS_ALLOWED_ORIGINS=https://tazatokri.example.com
-VITE_API_URL=
+> **Legacy Named Volume Migration Note (If Upgrading an Existing Host):** If an older host already stored files in the `backend_uploads` Docker named volume, copy them manually into `./backend/data/private-uploads` before starting the updated Compose file (`docker run --rm -v tazatokri_backend_uploads:/src:ro -v /opt/tazatokri/backend/data/private-uploads:/dst alpine sh -c 'cp -a /src/. /dst/ && chown -R 1001:1001 /dst'`). Do **not** delete `mysql_data`.
+
+### Step 2.3: Edge Reverse Proxy & Initial TLS Issuance (`scripts/tls-bootstrap.sh`)
+`docker-compose.yml` uses `frontend` Nginx (`infra/nginx/default.conf`) as the single edge reverse proxy on ports `80` and `443`. Nginx requires `fullchain.pem` and `privkey.pem` at startup, so issue the initial certificate **before** starting `frontend` (port `80` must be free and DNS `A` record must already resolve to the VPS):
+```bash
+cd /opt/tazatokri
+DOMAIN=your-production-domain.com CERTBOT_EMAIL=ops@your-production-domain.com bash scripts/tls-bootstrap.sh
+```
+This runs Certbot standalone HTTP-01, dereference-copies (`cp -L`) `fullchain.pem` (`644`) and `privkey.pem` (`600`) into `./infra/certs/`, and prepares `./infra/certbot/www` for future zero-downtime webroot renewals.
+
+### Step 2.4: Automatic TLS Renewal (`scripts/tls-renew.sh`)
+Schedule twice-daily renewal via host cron (`certbot renew --webroot -w /opt/tazatokri/infra/certbot/www`), preserving existing certificates on failure and reloading Nginx only after `nginx -t` passes:
+```cron
+15 3,15 * * * cd /opt/tazatokri && DOMAIN=your-production-domain.com bash scripts/tls-renew.sh >> /var/log/tazatokri-tls-renew.log 2>&1
 ```
 
 ---
 
-## 3. Reverse Proxy & SSL Setup
+## 3. Versioned Docker Image Strategy
 
-In production, user traffic should hit a reverse proxy on ports 80/443, terminating TLS and proxying requests to the Docker containers.
+`docker-compose.yml` assigns explicit versioned image tags to both application services:
+- **Backend image:** `tazatokri-backend:${APP_VERSION:-0.4.0}`
+- **Frontend image:** `tazatokri-frontend:${APP_VERSION:-0.4.0}`
+- **Default version:** `0.4.0` (never use `latest`).
 
-### Recommended Caddyfile (`/etc/caddy/Caddyfile`)
-```caddy
-tazatokri.example.com {
-    # Security headers
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
+### Why Versioned Images Are Retained
+Building a new version (e.g., `0.5.0`) creates new local tags without overwriting or pruning the previous version (`0.4.0`). This enables fast application-only rollback (`--no-build`) without rebuilding from source during an incident.
 
-    # Proxy backend REST APIs and Actuator health
-    handle /api/* {
-        reverse_proxy localhost:8080
-    }
-    handle /actuator/health* {
-        reverse_proxy localhost:8080
-    }
+### Manual Build & Deploy Commands
+```bash
+# Build a specific version
+APP_VERSION=0.5.0 docker compose build backend frontend
 
-    # Proxy frontend PWA static assets
-    handle /* {
-        reverse_proxy localhost:80
-    }
-}
+# Deploy that specific version (preserving volumes/data)
+APP_VERSION=0.5.0 docker compose up -d mysql backend frontend
 ```
 
 ---
 
-## 4. Launching the Services
+## 4. Safe Production Deployment (`scripts/deploy-prod.sh`)
 
-Run Docker Compose to build images and launch containers in detached mode:
+### Fresh Bootstrap (Empty VPS Only)
+Use `INITIAL_BOOTSTRAP=true` **only** when neither a `mysql` container nor a `mysql_data` volume exists yet (the script aborts if any existing container or `mysql_data` volume is detected):
 ```bash
-docker compose pull mysql
-docker compose up -d --build
+cd /opt/tazatokri
+INITIAL_BOOTSTRAP=true APP_VERSION=0.4.0 bash scripts/deploy-prod.sh
 ```
+After `mysql`, `backend`, and `frontend` pass health checks, `deploy-prod.sh` automatically takes and verifies the initial encrypted baseline backup.
 
-### Verifying Container Health
+### Subsequent Deployments (Existing Database)
+For all subsequent releases, run without `INITIAL_BOOTSTRAP`:
 ```bash
+cd /opt/tazatokri
+APP_VERSION=0.5.0 bash scripts/deploy-prod.sh
+```
+*(If `APP_VERSION` is omitted, it uses the value from `.env` or defaults to `0.4.0`.)*
+
+### Automated Deployment Flow
+1. **Preflight:** Verifies `docker`, `docker compose`, `docker-compose.yml`, `.env` (never printed), `infra/certs/{fullchain,privkey}.pem`, `scripts/backup-mysql.sh`, and runs `docker compose config -q`.
+2. **Mandatory Encrypted Backup Gate:** For existing databases, invokes `scripts/backup-mysql.sh` (`BACKUP_MODE=docker`, `BACKUP_ENV=production`) executing `mysqldump` inside the internal `mysql` container **before** any build or container change. If the backup fails, deployment aborts immediately.
+3. **Versioned Build:** Builds `tazatokri-backend:${APP_VERSION}` and `tazatokri-frontend:${APP_VERSION}` without pruning prior versions.
+4. **Deploy:** Runs `docker compose up -d mysql backend frontend` (never `down`, `-v`, or `prune`). **Note:** Spring Boot executes Flyway migrations (`V1`–`V4`+) automatically on backend startup; application rollback does not reverse database migrations.
+5. **Bounded Health Verification:**
+   - Polls backend readiness inside the `backend` container (`http://localhost:8080/actuator/health/readiness`) up to `HEALTH_MAX_ATTEMPTS` (default `24`) every `HEALTH_POLL_SECONDS` (default `5`s), requiring `"UP"`.
+   - Polls frontend health inside the `frontend` container (`http://localhost:80/nginx-health`) up to `24` attempts every `5`s, requiring `ok`.
+6. **Post-Bootstrap Baseline Backup / Summary:** On `INITIAL_BOOTSTRAP=true`, runs the baseline encrypted MySQL backup immediately after readiness passes. Exits non-zero if any step fails.
+
+---
+
+## 5. Post-Deployment Verification
+
+Because `backend` (`8080`) is internal-only and `/nginx-health` is localhost-restricted, verify service health through containers or the HTTPS edge:
+
+```bash
+# Container status & health
 docker compose ps
-```
-Expected output:
-- `tazatokri-mysql`: `Up (healthy)` (internal port 3306 only)
-- `tazatokri-backend`: `Up (healthy)` (port 8080 on localhost)
-- `tazatokri-frontend`: `Up (healthy)` (port 80 on localhost)
 
-### Inspecting Startup Logs
-```bash
-docker compose logs -f backend
-```
-Look for the verification message:
-```text
-Production security hardening verification passed successfully.
-Flyway Community Edition 10.x.x by Redgate
-Successfully validated 4 migrations (execution time 00:00.045s)
-Started TazatokriBackendApplication in 4.2 seconds
+# Internal backend readiness (verifies MySQL connectivity)
+docker compose exec -T backend wget -qO- http://localhost:8080/actuator/health/readiness
+
+# Internal frontend Nginx health
+docker compose exec -T frontend wget -qO- http://localhost:80/nginx-health
+
+# Public catalog via HTTPS edge
+curl -fsS https://your-production-domain.com/api/public/vegetables
 ```
 
 ---
 
-## 5. Post-Deployment Verification Checklist
+## 6. Daily Backups, Offsite Replication & Logs
 
-1. **Verify Database Health:**
-   ```bash
-   curl -I http://localhost:8080/actuator/health
-   ```
-   Must return `HTTP/1.1 200 OK` with status `UP`.
-2. **Verify Public Catalog API:**
-   ```bash
-   curl http://localhost:8080/api/public/vegetables
-   ```
-   Returns active vegetable catalog with 36 items.
-3. **Verify First Store Owner Bootstrap:**
-   - Log into the web interface at `https://tazatokri.example.com/login` using the `BOOTSTRAP_OWNER_PHONE` and `BOOTSTRAP_OWNER_PASSWORD`.
-   - Immediately change the owner password from the staff settings interface.
-4. **Verify Upload Directory Permissions:**
-   Ensure `/opt/tazatokri/data/private-uploads` is owned by UID 1001 (`tazatokri`).
-
----
-
-## 6. Daily Maintenance & Automated Backups
-
-A cron job should be installed on the host to create daily database dumps:
-```bash
-# Add to host crontab (crontab -e)
-0 2 * * * cd /opt/tazatokri && ./scripts/backup-db.sh >> /var/log/tazatokri-backup.log 2>&1
-```
-
-To view logs across all services:
-```bash
-docker compose logs -n 100 -f
-```
+- **Automated Daily MySQL Backups:** Schedule `scripts/backup-mysql.sh` with `BACKUP_MODE=docker`, `BACKUP_ENV=production`, and `BACKUP_STATUS_FILE=/opt/tazatokri/backend/data/backup-status/backup-status.json`. Store `BACKUP_ENCRYPTION_PASSPHRASE` independently offsite.
+- **Proof-of-Delivery Uploads:** Schedule `scripts/backup-uploads.sh` (`BACKUP_ENV=production`, `BACKUP_ENCRYPTION_PASSPHRASE` required) to archive `./backend/data/private-uploads` with `14`-day retention.
+- **Offsite Replication:** Sync `./backend/data/backups/` (`.sql.gz.enc`, `.tar.gz.enc`, and `.sha256` files) to offsite encrypted object storage (e.g., `rclone sync` / S3) after each daily run.
+- **Isolated Restore Verification:** Periodically test backups on the VPS using `RESTORE_MODE=docker TEST_DB_NAME=tazatokri_restore_verify bash scripts/restore-mysql-test.sh <artifact.sql.gz.enc>`.
+- **Logs:** Docker Compose caps container logs with `json-file` (`max-size: 10m`, `max-file: 5`). Inspect with:
+  ```bash
+  docker compose logs -n 100 -f
+  ```

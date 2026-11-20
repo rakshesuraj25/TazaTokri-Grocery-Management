@@ -72,8 +72,9 @@ public class SentryErrorReporter {
 		}
 		recentEvents.add(event);
 
-		log.error("error_event corrId={} env={} category={} endpoint={} msg={}",
-				corrId, environment, category, scrubbedEndpoint, scrubbedMsg);
+		String exType = ex != null ? ex.getClass().getSimpleName() : "UnknownException";
+		log.error("error_event corrId={} env={} category={} endpoint={} exception={} msg={}",
+				corrId, environment, category, scrubbedEndpoint, exType, scrubbedMsg, ex);
 		return event;
 	}
 

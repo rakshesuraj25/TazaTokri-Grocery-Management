@@ -1,103 +1,86 @@
 # TazaTokri Production Rollback & Disaster Recovery Plan
 
-This document outlines the standard operating procedures for executing a quick, safe, and zero-data-loss rollback in the event of an unhealthy release or severe production anomaly.
+This document defines the safe production rollback procedures for TazaTokri, aligned with versioned Docker images (`APP_VERSION`), internal container health checks, and encrypted MySQL backups (`.sql.gz.enc`).
 
 ---
 
-## 1. Rollback Triggers & Severity Classification
+## 1. Rollback Decision Matrix
 
-| Severity Level | Anomaly Description | Action Required |
+| Severity | Symptom | Recommended Action |
 |---|---|---|
-| **SEV-1 (Critical)** | Backend in crash-loop (`CrashLoopBackOff`), database migration failed or corrupted schema, order checkout failing 100% of the time, or data corruption detected. | **Immediate Full Rollback** (Code + Database Restore if schema corrupted). |
-| **SEV-2 (Major)** | Core feature degraded (e.g., Quick Sale POS failing, delivery OTP not issuing, receipt printing broken), but database remains consistent and catalog browsing works. | **Application Rollback** (Revert backend/frontend images to previous stable release; keep database intact). |
-| **SEV-3 (Minor)** | Minor styling glitch, translation typo, or edge-case UI reporting bug. | **Hotfix via normal deploy** (No rollback needed). |
+| **SEV-1 (Schema/Data Corruption)** | Flyway migration failed midway, destructive DDL corrupted schema, or severe data corruption occurred. | **Separate Manual Disaster-Recovery Procedure:** Stop `backend`, review impact, and manually restore a verified `.sql.gz.enc` backup before starting the prior `APP_VERSION`. |
+| **SEV-2 (Application Regression)** | New release fails startup/readiness or breaks app behavior, while database schema remains valid or backward-compatible. | **Application-Only Rollback:** Run `APP_VERSION=<previous> bash scripts/rollback-prod.sh` using retained local images (`--no-build`). **Do NOT restore the database.** |
+| **SEV-3 (Minor UI/Copy Defect)** | Minor styling or translation issue. | **Fix forward** via normal `scripts/deploy-prod.sh` release. |
+
+> **CRITICAL WARNING:** Never run a database restore for an ordinary application or UI bug. Restoring an earlier backup **permanently discards** orders, payments, stock movements, and user changes recorded after that backup was taken.
 
 ---
 
-## 2. Fast Application Rollback (Zero DB Impact)
+## 2. Application-Only Rollback (`scripts/rollback-prod.sh`)
 
-Use this procedure when the database schema has **not** been corrupted and the issue is strictly application code or frontend bundling.
+Use `scripts/rollback-prod.sh` when the database does **not** need restoration and you want to switch `backend` and `frontend` back to a previously deployed `APP_VERSION` without rebuilding from source.
 
-### Step 2.1: Revert Code to Previous Git Tag or Commit
+### Command Example
 ```bash
 cd /opt/tazatokri
-
-# Checkout previous stable release tag (e.g., v0.4.0)
-git checkout v0.4.0
-
-# Or revert the last commit:
-# git revert HEAD --no-edit
+APP_VERSION=0.4.0 bash scripts/rollback-prod.sh
 ```
 
-### Step 2.2: Rebuild & Restart Containers
-```bash
-docker compose up -d --build backend frontend
-```
+### Verified Script Behavior
+1. **Explicit `APP_VERSION` Required:** `APP_VERSION` must be supplied explicitly (never guessed, never `latest`).
+2. **Pre-Rollback Image Check:** Verifies both `tazatokri-backend:${APP_VERSION}` and `tazatokri-frontend:${APP_VERSION}` exist locally via `docker image inspect` **before** altering any running container. If either image is missing, the script aborts.
+3. **No Rebuild / No MySQL Restart:** Executes `docker compose up -d --no-build backend frontend`, preserving `mysql`, volumes, and prior image tags.
+4. **Bounded Health Verification:**
+   - Polls backend readiness inside the `backend` container (`http://localhost:8080/actuator/health/readiness`) up to `HEALTH_MAX_ATTEMPTS` (default `24`) every `HEALTH_POLL_SECONDS` (default `5`s), requiring `"UP"`.
+   - Polls frontend health inside the `frontend` container (`http://localhost:80/nginx-health`) up to `24` attempts every `5`s, requiring `ok`.
+5. **Failure Handling:** Both checks must pass for rollback success. If either fails, the script logs the failed stage and target `APP_VERSION`, warns that the application is unhealthy, exits non-zero, and **never** attempts a second automatic rollback or database restore.
 
-### Step 2.3: Invalidate PWA Service Worker Cache
-The frontend PWA utilizes Workbox. When rolling back:
-1. The new deployment serves `dist/sw.js` with an updated revision hash.
-2. Browsers running the app will receive the `controllerchange` event and prompt the user or automatically refresh to load the reverted assets.
-3. If users report stale UI, instruct them to perform a hard refresh (`Ctrl + Shift + R` or `Cmd + Shift + R`).
+### PWA Service Worker Cache Note
+`frontend` uses Workbox PWA caching (`vite.config.ts`). Switching back to the previous `frontend` image serves its previous `sw.js` revision; connected clients update on next navigation/reload (`Ctrl + Shift + R` if a user reports cached assets).
 
 ---
 
-## 3. Database Schema Rollback & Point-in-Time Restore
+## 3. Flyway Migration Risk & Compatibility
 
-If a failed deployment executed destructive DDL or introduced corrupted rows, follow this disaster recovery procedure.
-
-### Step 3.1: Stop Web Traffic & Backend Container
-Prevent new orders and writes from entering the database:
-```bash
-cd /opt/tazatokri
-docker compose stop backend
-```
-
-### Step 3.2: Identify Latest Verified Backup File
-Backups are archived in the named volume `/app/data/backups` or the host backup directory:
-```bash
-ls -lh /opt/tazatokri/backend/data/backups/tazatokri_backup_*.sql
-```
-Verify SHA-256 integrity of the chosen backup file:
-```bash
-sha256sum -c /opt/tazatokri/backend/data/backups/tazatokri_backup_20261119_221508.sql.sha256
-```
-Must return `OK`.
-
-### Step 3.3: Restore Database Dump into MySQL Container
-Restore the clean SQL dump:
-```bash
-# Load environment variables to obtain DB credentials
-source .env
-
-# Execute restore via Docker container pipe
-docker compose exec -T mysql mysql -u root -p"$DB_ROOT_PASSWORD" "$DB_NAME" < /opt/tazatokri/backend/data/backups/tazatokri_backup_20261119_221508.sql
-```
-
-### Step 3.4: Repair Flyway Schema Table (If Required)
-If a migration failed midway or recorded an erroneous checksum:
-```bash
-# Check flyway history table
-docker compose exec -T mysql mysql -u root -p"$DB_ROOT_PASSWORD" -e "SELECT installed_rank, version, description, success FROM tazatokri.flyway_schema_history;"
-
-# If a failed migration is recorded (success = 0), delete the failed row:
-docker compose exec -T mysql mysql -u root -p"$DB_ROOT_PASSWORD" -e "DELETE FROM tazatokri.flyway_schema_history WHERE success = 0;"
-```
-
-### Step 3.5: Restart Application & Verify Health
-```bash
-# Rebuild previous stable backend image
-git checkout v0.4.0
-docker compose up -d --build backend
-
-# Verify health endpoint
-curl -I http://localhost:8080/actuator/health
-```
+- Spring Boot executes Flyway migrations (`V1`–`V4`+) **automatically at backend startup** (`spring.flyway.enabled=true`) and validates entities against the schema (`spring.jpa.hibernate.ddl-auto=validate`).
+- **Application-only rollback does NOT reverse Flyway database migrations.**
+- If a new release applied a breaking DDL change (e.g., dropping/renaming a column or adding a non-nullable column without a default), rolling back to an older `APP_VERSION` image may fail Hibernate schema validation (`ddl-auto=validate`) or runtime queries.
+- **Best Practice:** Keep production Flyway migrations backward-compatible (expand-and-contract) whenever possible so application-only rollback remains viable without DB restoration.
 
 ---
 
-## 4. Emergency Communications & Post-Incident Review
+## 4. Encrypted Backups (`scripts/backup-mysql.sh` & `scripts/backup-uploads.sh`)
 
-1. **Staff & Delivery Operations:** Notify staff via WhatsApp/phone that orders from the incident window must be reconciled against counter sales ledger.
-2. **Pending Online Payments:** For any Razorpay payment captured during the rollback window, check the Razorpay Dashboard and manually issue refunds or fulfill orders in the admin panel.
-3. **Post-Mortem:** Conduct root cause analysis within 24 hours and document corrective actions before re-attempting deployment.
+Production backups created by `scripts/backup-mysql.sh` use the following pipeline:
+- **Internal-Only MySQL Dump:** Supports `BACKUP_MODE=docker` (via `docker compose exec -T -e MYSQL_PWD=... mysql mysqldump` so MySQL port `3306` never needs to be published on the host) as well as `BACKUP_MODE=host` (`--defaults-extra-file`, `chmod 600`), using `--single-transaction --routines --triggers --events --hex-blob --set-gtid-purged=OFF --default-character-set=utf8mb4`.
+- **Compression:** `gzip -9` + `gzip -t` integrity check (`.sql.gz`).
+- **Encryption at Rest:** Mandatory in `BACKUP_ENV=production` for **both** MySQL (`scripts/backup-mysql.sh`) and POD uploads (`scripts/backup-uploads.sh`) via OpenSSL `aes-256-cbc -pbkdf2 -iter 100000 -salt` using `BACKUP_ENCRYPTION_PASSPHRASE` (`.sql.gz.enc` / `.tar.gz.enc`).
+- **Naming Convention:** `tazatokri_backup_YYYYMMDD_HHMMSS.sql.gz.enc` (and `tazatokri_uploads_YYYYMMDD_HHMMSS.tar.gz.enc`) + separate `<artifact>.sha256` checksum file (`chmod 600` in `chmod 700` backup directory).
+- **Separated Status Metadata & Retention:** Updates `backup-status.json` (`chmod 644` in `./backend/data/backup-status/`, mounted `:ro` into `backend` so encrypted archives are never exposed to the application container), consumed by `GET /api/ops/health`. Retention pruning removes only matching `tazatokri_backup_*` / `tazatokri_uploads_*` files older than `BACKUP_RETENTION_DAYS` (default `14`) while preserving the newest valid backup.
+- **Isolated Restore Verification:** `scripts/restore-mysql-test.sh` supports `RESTORE_MODE=docker` to test `.sql.gz.enc` restores into an isolated test schema inside `mysql` without publishing port `3306` and explicitly blocks `tazatokri`, `tazatokri_prod`, and `phase6a` schemas.
+
+---
+
+## 5. Disaster Recovery (Database Restoration Concept)
+
+> **IMPORTANT:** Production database restoration is a **separate manual disaster-recovery procedure** requiring explicit operator review. Do **NOT** use `scripts/restore-mysql-test.sh` for production — it is strictly for isolated test targets and intentionally blocks `tazatokri` and `tazatokri_prod`.
+
+When schema corruption or unrecoverable data loss requires restoring a pre-deploy backup:
+1. **Halt Application Writes:** Stop the `backend` container (`docker compose stop backend`) so no new orders/payments mutate the database.
+2. **Verify Backup Integrity First:** Confirm the `.sha256` checksum of the chosen `.sql.gz.enc` artifact matches before decrypting (`sha256sum -c <artifact>.sha256`).
+3. **Decrypt & Decompress Safely:** Decrypt using the independently stored `BACKUP_ENCRYPTION_PASSPHRASE` (`openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000`) and decompress (`gzip -dc`) into a protected temporary file (`chmod 600`), verifying SQL readability before applying.
+4. **Restore & Reconcile:** Restore into the target MySQL instance under operator supervision, clean up temporary plaintext SQL immediately afterward, start the matching `APP_VERSION` (`APP_VERSION=<matching_version> bash scripts/rollback-prod.sh`), and verify `/actuator/health/readiness` and `/nginx-health`.
+5. **Post-Incident Reconciliation:** Reconcile any Razorpay payments or orders that occurred between the backup timestamp and the outage using the Razorpay Dashboard and staff ledger.
+
+---
+
+## 6. Failure Scenario Quick Reference
+
+| Failure Scenario | Immediate Action |
+|---|---|
+| **Backend startup failure (no breaking DDL)** | Inspect `docker compose logs backend`; roll back with `APP_VERSION=<prev> bash scripts/rollback-prod.sh`. |
+| **Frontend startup / Nginx failure** | Inspect `docker compose logs frontend`; verify `infra/certs/` and `infra/nginx/default.conf`, or roll back with `rollback-prod.sh`. |
+| **Health-check timeout during deploy** | Check `docker compose ps` and `docker compose logs backend mysql`; confirm whether MySQL is slow/recovering before deciding to roll back. |
+| **Application bug after successful deploy** | Use application-only rollback (`rollback-prod.sh`); do **not** restore the database. |
+| **Flyway migration failure (`success=0`)** | Stop `backend`; inspect `flyway_schema_history` and logs; execute manual disaster-recovery restore of pre-deploy `.sql.gz.enc` backup if partial DDL occurred. |
+| **Old image incompatible with new schema** | Do **not** force older image; either fix forward with a new release or perform reviewed manual disaster-recovery restore to the pre-migration backup. |

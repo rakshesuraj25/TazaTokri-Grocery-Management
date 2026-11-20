@@ -1,7 +1,10 @@
 package com.tazatokri.common;
 
+import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -28,6 +31,8 @@ public class ScheduledJobs {
 
 	@Scheduled(initialDelay = 30_000, fixedDelay = 60_000)
 	public void expireUnpaidOrders() {
+		String jobCorrId = "job-expiry-" + UUID.randomUUID().toString().substring(0, 8);
+		MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID, jobCorrId);
 		try {
 			int n = expiry.expireUnpaid();
 			if (n > 0) {
@@ -35,6 +40,8 @@ public class ScheduledJobs {
 			}
 		} catch (Exception e) {
 			log.error("Expiry job failed", e);
+		} finally {
+			MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID);
 		}
 	}
 
@@ -43,6 +50,8 @@ public class ScheduledJobs {
 		if (!gateway.isConfigured()) {
 			return;
 		}
+		String jobCorrId = "job-refund-" + UUID.randomUUID().toString().substring(0, 8);
+		MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID, jobCorrId);
 		try {
 			int n = refunds.processPending();
 			if (n > 0) {
@@ -50,6 +59,8 @@ public class ScheduledJobs {
 			}
 		} catch (Exception e) {
 			log.error("Refund job failed", e);
+		} finally {
+			MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID);
 		}
 	}
 }
