@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -96,6 +97,7 @@ import com.tazatokri.notification.OrderMessageTemplates;
 import com.tazatokri.notification.WhatsAppCloudApiProvider;
 import com.tazatokri.order.CustomerOrder;
 import com.tazatokri.order.CustomerOrderRepository;
+import com.tazatokri.order.OrderFlowService;
 import com.tazatokri.order.OrderItemRequest;
 import com.tazatokri.order.OrderPaymentMethod;
 import com.tazatokri.order.OrderResponse;
@@ -2076,5 +2078,570 @@ class TazatokriBackendApplicationTests {
         // --- 3. JwtService constructor enforces 32-byte secret length unconditionally ---
         assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("short-secret-key", 60));
         assertThrows(IllegalStateException.class, () -> new com.tazatokri.auth.JwtService("", 60));
+    }
+
+    // =========================================================================
+    // PHASE 6A.1: REALISTIC GROCERY DAY PILOT SCENARIO (CUSTOMER, STAFF, DELIVERY, OWNER)
+    // =========================================================================
+
+    @Test
+    void phase6a1FamilyAndStaffPilotRealisticGroceryDayScenario() throws Exception {
+        // --- 1. MORNING: Catalog & Price Initialization ---
+        Category cat = new Category();
+        setId(cat, 1L);
+        cat.setName("Everyday Vegetables");
+        cat.setActive(true);
+
+        // Vegetable 1: Tomato (₹40.00/kg)
+        Vegetable tomato = new Vegetable();
+        setId(tomato, 101L);
+        tomato.setNameEn("Tomato");
+        tomato.setNameMr("टोमॅटो");
+        tomato.setNameHi("टमाटर");
+        tomato.setCategory(cat);
+        tomato.setBaseUnit(UnitType.KG);
+        tomato.setActive(true);
+        tomato.setAvailable(true);
+
+        VegetableUnit tom1kg = new VegetableUnit();
+        setId(tom1kg, 1001L);
+        tom1kg.setVegetable(tomato);
+        tom1kg.setLabel("1kg");
+        tom1kg.setQuantityInBaseUnit(new BigDecimal("1.000"));
+        tom1kg.setDefaultOption(true);
+        tom1kg.setActive(true);
+        tomato.getUnits().add(tom1kg);
+
+        // Vegetable 2: Potato (₹30.00/kg)
+        Vegetable potato = new Vegetable();
+        setId(potato, 102L);
+        potato.setNameEn("Potato");
+        potato.setNameMr("बटाटा");
+        potato.setNameHi("आलू");
+        potato.setCategory(cat);
+        potato.setBaseUnit(UnitType.KG);
+        potato.setActive(true);
+        potato.setAvailable(true);
+
+        VegetableUnit pot1kg = new VegetableUnit();
+        setId(pot1kg, 1002L);
+        pot1kg.setVegetable(potato);
+        pot1kg.setLabel("1kg");
+        pot1kg.setQuantityInBaseUnit(new BigDecimal("1.000"));
+        pot1kg.setDefaultOption(true);
+        pot1kg.setActive(true);
+        potato.getUnits().add(pot1kg);
+
+        // Vegetable 3: Onion (₹50.00/kg)
+        Vegetable onion = new Vegetable();
+        setId(onion, 103L);
+        onion.setNameEn("Onion");
+        onion.setNameMr("कांदा");
+        onion.setNameHi("प्याज");
+        onion.setCategory(cat);
+        onion.setBaseUnit(UnitType.KG);
+        onion.setActive(true);
+        onion.setAvailable(true);
+
+        VegetableUnit oni1kg = new VegetableUnit();
+        setId(oni1kg, 1003L);
+        oni1kg.setVegetable(onion);
+        oni1kg.setLabel("1kg");
+        oni1kg.setQuantityInBaseUnit(new BigDecimal("1.000"));
+        oni1kg.setDefaultOption(true);
+        oni1kg.setActive(true);
+        onion.getUnits().add(oni1kg);
+
+        // Vegetable 4: Fresh Coriander (₹20.00/bunch)
+        Vegetable coriander = new Vegetable();
+        setId(coriander, 104L);
+        coriander.setNameEn("Fresh Coriander");
+        coriander.setNameMr("कोथिंबीर");
+        coriander.setNameHi("धनिया");
+        coriander.setCategory(cat);
+        coriander.setBaseUnit(UnitType.BUNCH);
+        coriander.setActive(true);
+        coriander.setAvailable(true);
+
+        VegetableUnit cor1bunch = new VegetableUnit();
+        setId(cor1bunch, 1004L);
+        cor1bunch.setVegetable(coriander);
+        cor1bunch.setLabel("1 bunch");
+        cor1bunch.setQuantityInBaseUnit(new BigDecimal("1.000"));
+        cor1bunch.setDefaultOption(true);
+        cor1bunch.setActive(true);
+        coriander.getUnits().add(cor1bunch);
+
+        Map<Long, Vegetable> vegMap = Map.of(101L, tomato, 102L, potato, 103L, onion, 104L, coriander);
+
+        VegetablePrice priceTomato = new VegetablePrice(
+                tomato, new BigDecimal("40.00"), PriceSource.MANUAL, "Manual price", 1L);
+        VegetablePrice pricePotato = new VegetablePrice(
+                potato, new BigDecimal("30.00"), PriceSource.MANUAL, "Manual price", 1L);
+        VegetablePrice priceOnion = new VegetablePrice(
+                onion, new BigDecimal("50.00"), PriceSource.MANUAL, "Manual price", 1L);
+        VegetablePrice priceCoriander = new VegetablePrice(
+                coriander, new BigDecimal("20.00"), PriceSource.MANUAL, "Manual price", 1L);
+
+        Map<Long, VegetablePrice> priceMap = Map.of(
+                101L, priceTomato,
+                102L, pricePotato,
+                103L, priceOnion,
+                104L, priceCoriander);
+
+        // Users & Roles
+        User owner = new User();
+        setId(owner, 1L);
+        owner.setFullName("Store Owner");
+        owner.setPhone("9999999999");
+        owner.setRoles(java.util.Set.of(Role.OWNER));
+
+        User staff = new User();
+        setId(staff, 2L);
+        staff.setFullName("Ramesh Staff");
+        staff.setPhone("9888888888");
+        staff.setRoles(java.util.Set.of(Role.STAFF));
+
+        User driver1 = new User();
+        setId(driver1, 3L);
+        driver1.setFullName("Sunil Driver");
+        driver1.setPhone("9111111111");
+        driver1.setRoles(java.util.Set.of(Role.DELIVERY));
+
+        User driver2 = new User();
+        setId(driver2, 4L);
+        driver2.setFullName("Ajay Driver");
+        driver2.setPhone("9222222222");
+        driver2.setRoles(java.util.Set.of(Role.DELIVERY));
+
+        User customer1 = new User();
+        setId(customer1, 10L);
+        customer1.setFullName("Pooja Customer");
+        customer1.setPhone("9333333333");
+        customer1.setRoles(java.util.Set.of(Role.CUSTOMER));
+
+        Map<Long, User> userMap = Map.of(
+                1L, owner,
+                2L, staff,
+                3L, driver1,
+                4L, driver2,
+                10L, customer1);
+
+        // Address (Serviceable PIN code: 411026)
+        Address custAddr = new Address();
+        setId(custAddr, 501L);
+        custAddr.setUserId(10L);
+        custAddr.setLabel("Home");
+        custAddr.setLine1("Flat 12, Kothrud");
+        custAddr.setPincode("411026");
+        custAddr.setActive(true);
+
+        // Ledger & Repositories
+        List<StockMovement> ledger = new ArrayList<>();
+        AtomicLong movSeq = new AtomicLong(1);
+
+        StockMovementRepository movementRepo = stub(StockMovementRepository.class, (p, m, a) -> {
+            switch (m.getName()) {
+                case "currentStock": {
+                    Long vegId = (Long) a[0];
+                    return ledger.stream()
+                            .filter(sm -> sm.getVegetable().getId().equals(vegId))
+                            .map(StockMovement::getQuantity)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                }
+                case "save": {
+                    StockMovement sm = (StockMovement) a[0];
+                    setId(sm, movSeq.getAndIncrement());
+                    Field cf = StockMovement.class.getDeclaredField("createdAt");
+                    cf.setAccessible(true);
+                    if (cf.get(sm) == null) cf.set(sm, LocalDateTime.now());
+                    ledger.add(sm);
+                    return sm;
+                }
+                case "findWastageMovementsBetween":
+                    return ledger.stream().filter(sm -> sm.getType() == MovementType.WASTAGE).toList();
+                default:
+                    throw new UnsupportedOperationException(m.getName());
+            }
+        });
+
+        VegetableRepository vegRepo = stub(VegetableRepository.class, (p, m, a) -> {
+            if ("findByIdForUpdate".equals(m.getName()) || "findById".equals(m.getName()) || "findWithDetailsById".equals(m.getName())) {
+                return Optional.ofNullable(vegMap.get((Long) a[0]));
+            }
+            if ("findAll".equals(m.getName())) return new ArrayList<>(vegMap.values());
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        VegetablePriceRepository priceRepo = stub(VegetablePriceRepository.class, (p, m, a) -> {
+            if ("findFirstByVegetableIdOrderByIdDesc".equals(m.getName()) || "findLatestByVegetableId".equals(m.getName())) {
+                return Optional.ofNullable(priceMap.get((Long) a[0]));
+            }
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        UserRepository userRepo = stub(UserRepository.class, (p, m, a) -> {
+            if ("findByPhone".equals(m.getName())) {
+                String ph = (String) a[0];
+                return userMap.values().stream().filter(u -> u.getPhone().equals(ph)).findFirst();
+            }
+            if ("findById".equals(m.getName())) {
+                return Optional.ofNullable(userMap.get((Long) a[0]));
+            }
+            if ("findAllById".equals(m.getName())) {
+                return new ArrayList<>(userMap.values());
+            }
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        AddressRepository addressRepo = stub(AddressRepository.class, (p, m, a) -> {
+            if ("findByIdAndUserId".equals(m.getName()) || "findByIdAndUserIdAndActiveTrue".equals(m.getName())) {
+                return Optional.of(custAddr);
+            }
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        InventoryService inventoryService = new InventoryService(movementRepo, vegRepo, userRepo);
+
+        // --- 1. MORNING PURCHASES: Record Initial Stock ---
+        // Tomato: 50kg in
+        inventoryService.record(101L, MovementType.PURCHASE, new BigDecimal("50.000"), "Mandi Lot #1", "PURCHASE", 1L, owner.getPhone());
+        // Potato: 60kg in
+        inventoryService.record(102L, MovementType.PURCHASE, new BigDecimal("60.000"), "Mandi Lot #2", "PURCHASE", 1L, owner.getPhone());
+        // Onion: 40kg in
+        inventoryService.record(103L, MovementType.PURCHASE, new BigDecimal("40.000"), "Mandi Lot #3", "PURCHASE", 1L, owner.getPhone());
+        // Coriander: 30 bunches in
+        inventoryService.record(104L, MovementType.PURCHASE, new BigDecimal("30.000"), "Mandi Lot #4", "PURCHASE", 1L, owner.getPhone());
+
+        assertEquals(new BigDecimal("50.000"), inventoryService.currentStock(101L));
+        assertEquals(new BigDecimal("60.000"), inventoryService.currentStock(102L));
+        assertEquals(new BigDecimal("40.000"), inventoryService.currentStock(103L));
+        assertEquals(new BigDecimal("30.000"), inventoryService.currentStock(104L));
+
+        // Delivery Rules: min-order=150, fee=30, free-above=300, cutoff=18:00
+        DeliveryRules deliveryRules = new DeliveryRules(
+                List.of("411026", "411039"),
+                new BigDecimal("150.00"),
+                new BigDecimal("30.00"),
+                new BigDecimal("300.00"),
+                "18:00"
+        );
+
+        List<CustomerOrder> orderStore = new ArrayList<>();
+        AtomicLong orderSeq = new AtomicLong(100);
+
+        CustomerOrderRepository orderRepo = stub(CustomerOrderRepository.class, (p, m, a) -> {
+            switch (m.getName()) {
+                case "save": {
+                    CustomerOrder co = (CustomerOrder) a[0];
+                    if (co.getId() == null) setId(co, orderSeq.getAndIncrement());
+                    if (!orderStore.contains(co)) orderStore.add(co);
+                    return co;
+                }
+                case "findById":
+                case "findByIdForUpdate":
+                case "findWithDetailsById": {
+                    Long id = (Long) a[0];
+                    return orderStore.stream().filter(o -> o.getId().equals(id)).findFirst();
+                }
+                case "findWithDetailsByClientRef": {
+                    String ref = (String) a[0];
+                    return orderStore.stream().filter(o -> ref.equals(o.getClientRef())).findFirst();
+                }
+                default:
+                    throw new UnsupportedOperationException(m.getName());
+            }
+        });
+
+        OrderService orderService = new OrderService(
+                orderRepo, userRepo, addressRepo, vegRepo, priceRepo, inventoryService, deliveryRules);
+
+        // --- 2. CUSTOMER ORDERS SIMULATION ---
+
+        // A. Order below Rs 150 minimum (₹80 Tomato + ₹30 Potato = ₹110) -> Rejected
+        assertThrows(BadRequestException.class, () -> orderService.place(
+                new PlaceOrderRequest("ord-below-min", 501L, OrderPaymentMethod.COD, List.of(
+                        new OrderItemRequest(101L, 1001L, 2),
+                        new OrderItemRequest(102L, 1002L, 1)
+                )), "9333333333"));
+
+        // B. Order exactly at Rs 150 minimum: 2kg Tomato (₹80) + 1kg Onion (₹50) + 1 bunch Coriander (₹20) = ₹150
+        // Delivery fee: ₹30, Total: ₹180
+        OrderResponse orderB = orderService.place(
+                new PlaceOrderRequest("ord-150-b", 501L, OrderPaymentMethod.COD, List.of(
+                        new OrderItemRequest(101L, 1001L, 2),
+                        new OrderItemRequest(103L, 1003L, 1),
+                        new OrderItemRequest(104L, 1004L, 1)
+                )), "9333333333");
+        assertEquals(new BigDecimal("150.00"), orderB.subtotal());
+        assertEquals(new BigDecimal("30.00"), orderB.deliveryFee());
+        assertEquals(new BigDecimal("180.00"), orderB.estimatedTotal());
+        assertEquals(LocalDate.now(), orderB.deliveryDate());
+        assertEquals(new BigDecimal("48.000"), inventoryService.currentStock(101L));
+
+        // C. Order near Rs 300 threshold (₹270) -> Cancelled before packing, stock restored
+        OrderResponse orderC = orderService.place(
+                new PlaceOrderRequest("ord-270-c", 501L, OrderPaymentMethod.COD, List.of(
+                        new OrderItemRequest(101L, 1001L, 4), // 4kg * ₹40 = 160
+                        new OrderItemRequest(102L, 1002L, 2), // 2kg * ₹30 = 60
+                        new OrderItemRequest(103L, 1003L, 1)  // 1kg * ₹50 = 50 -> subtotal 270
+                )), "9333333333");
+        assertEquals(new BigDecimal("270.00"), orderC.subtotal());
+        assertEquals(new BigDecimal("30.00"), orderC.deliveryFee());
+        assertEquals(new BigDecimal("300.00"), orderC.estimatedTotal());
+        assertEquals(new BigDecimal("44.000"), inventoryService.currentStock(101L));
+
+        // Customer cancels Order C -> stock returned
+        PaymentRepository paymentRepo = stub(PaymentRepository.class, (p, m, a) -> {
+            if ("netPaid".equals(m.getName())) return BigDecimal.ZERO;
+            if ("netPaidByOrder".equals(m.getName())) return List.of();
+            if ("save".equals(m.getName())) return a[0];
+            return null;
+        });
+        PaymentService paymentService = new PaymentService(paymentRepo, userRepo);
+        OrderFlowService flowService = new OrderFlowService(orderRepo, userRepo, inventoryService, paymentService, new BigDecimal("20.00"));
+        flowService.cancelByCustomer(orderC.id(), "Customer changed mind", "9333333333");
+        assertEquals(new BigDecimal("48.000"), inventoryService.currentStock(101L), "Stock restored after cancellation");
+
+        // D. Order exactly at Rs 300 free delivery threshold: 5kg Tomato (₹200) + 2kg Onion (₹100) = ₹300
+        OrderResponse orderD = orderService.place(
+                new PlaceOrderRequest("ord-300-d", 501L, OrderPaymentMethod.COD, List.of(
+                        new OrderItemRequest(101L, 1001L, 5),
+                        new OrderItemRequest(103L, 1003L, 2)
+                )), "9333333333");
+        assertEquals(new BigDecimal("300.00"), orderD.subtotal());
+        assertEquals(BigDecimal.ZERO, orderD.deliveryFee(), "Delivery fee must be 0 for orders >= Rs 300");
+        assertEquals(new BigDecimal("300.00"), orderD.estimatedTotal());
+
+        // E. Order above Rs 300 placed after 18:00 cutoff -> Next-day delivery
+        LocalDateTime afterCutoffTime = LocalDateTime.of(LocalDate.now(), LocalTime.of(18, 30));
+        assertEquals(LocalDate.now().plusDays(1), deliveryRules.deliveryDateFor(afterCutoffTime));
+
+        // F. Overselling attempt (100kg Tomato when only 43kg remaining) -> Rejected
+        assertThrows(InsufficientStockException.class, () -> orderService.place(
+                new PlaceOrderRequest("ord-oversell", 501L, OrderPaymentMethod.COD, List.of(
+                        new OrderItemRequest(101L, 1001L, 100)
+                )), "9333333333"));
+
+        // --- 3. COUNTER SALES (QUICK SALE / POS) ---
+        List<Sale> saleStore = new ArrayList<>();
+        AtomicLong saleSeq = new AtomicLong(1);
+        SaleRepository saleRepo = stub(SaleRepository.class, (p, m, a) -> {
+            if ("findWithDetailsByClientRef".equals(m.getName())) {
+                String ref = (String) a[0];
+                return saleStore.stream().filter(s -> ref.equals(s.getClientRef())).findFirst();
+            }
+            if ("save".equals(m.getName())) {
+                Sale s = (Sale) a[0];
+                if (s.getId() == null) setId(s, saleSeq.getAndIncrement());
+                saleStore.add(s);
+                return s;
+            }
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        SaleService saleService = new SaleService(saleRepo, vegRepo, priceRepo, userRepo, inventoryService);
+
+        // Sale 1: Fractional weights (0.500 kg Tomato + 0.250 kg Onion), CASH
+        var sale1 = saleService.create(new SaleRequest("pos-sale-001", SalePaymentMethod.CASH, List.of(
+                new SaleItemRequest(101L, new BigDecimal("0.500")),
+                new SaleItemRequest(103L, new BigDecimal("0.250"))
+        )), "9888888888");
+        // 0.5 * 40 = 20, 0.25 * 50 = 12.50 -> 32.50
+        assertEquals(new BigDecimal("32.50"), sale1.totalAmount());
+
+        // Sale 2: Everyday staples (2.000 kg Potato + 1.000 kg Onion), UPI
+        var sale2 = saleService.create(new SaleRequest("pos-sale-002", SalePaymentMethod.UPI, List.of(
+                new SaleItemRequest(102L, new BigDecimal("2.000")),
+                new SaleItemRequest(103L, new BigDecimal("1.000"))
+        )), "9888888888");
+        assertEquals(new BigDecimal("110.00"), sale2.totalAmount());
+
+        // Sale 3: Fractional bulk (1.500 kg Tomato + 2.250 kg Potato + 2 bunches Coriander), CASH
+        var sale3 = saleService.create(new SaleRequest("pos-sale-003", SalePaymentMethod.CASH, List.of(
+                new SaleItemRequest(101L, new BigDecimal("1.500")),
+                new SaleItemRequest(102L, new BigDecimal("2.250")),
+                new SaleItemRequest(104L, new BigDecimal("2.000"))
+        )), "9888888888");
+        // 1.5*40 (60) + 2.25*30 (67.50) + 2*20 (40) = 167.50
+        assertEquals(new BigDecimal("167.50"), sale3.totalAmount());
+
+        // Sale 4: Large family sale (3.000 kg Onion + 4.000 kg Potato), UPI
+        var sale4 = saleService.create(new SaleRequest("pos-sale-004", SalePaymentMethod.UPI, List.of(
+                new SaleItemRequest(103L, new BigDecimal("3.000")),
+                new SaleItemRequest(102L, new BigDecimal("4.000"))
+        )), "9888888888");
+        assertEquals(new BigDecimal("270.00"), sale4.totalAmount());
+
+        // Sale 5: Double-click submission test (idempotency verification)
+        BigDecimal stockBefore = inventoryService.currentStock(101L);
+        var sale5A = saleService.create(new SaleRequest("pos-sale-005-doubleclick", SalePaymentMethod.CASH, List.of(
+                new SaleItemRequest(101L, new BigDecimal("1.000"))
+        )), "9888888888");
+        assertEquals(stockBefore.subtract(new BigDecimal("1.000")), inventoryService.currentStock(101L));
+
+        // Rapid second click with exact same clientRef returns the same sale id
+        var sale5B = saleService.create(new SaleRequest("pos-sale-005-doubleclick", SalePaymentMethod.CASH, List.of(
+                new SaleItemRequest(101L, new BigDecimal("1.000"))
+        )), "9888888888");
+        assertEquals(sale5A.id(), sale5B.id(), "Idempotent response must return the exact same sale");
+        // Stock must not be deducted twice
+        assertEquals(stockBefore.subtract(new BigDecimal("1.000")), inventoryService.currentStock(101L));
+
+        // --- 4. DELIVERY OPERATIONS & OTP VERIFICATION ---
+        List<DeliveryAttempt> attemptStore = new ArrayList<>();
+        AtomicLong attemptSeq = new AtomicLong(1);
+        DeliveryAttemptRepository attemptRepo = stub(DeliveryAttemptRepository.class, (p, m, a) -> {
+            switch (m.getName()) {
+                case "save": {
+                    DeliveryAttempt da = (DeliveryAttempt) a[0];
+                    if (da.getId() == null) setId(da, attemptSeq.getAndIncrement());
+                    if (!attemptStore.contains(da)) attemptStore.add(da);
+                    return da;
+                }
+                case "findFirstByOrderIdAndStatusIn": {
+                    Long oid = (Long) a[0];
+                    @SuppressWarnings("unchecked")
+                    java.util.Collection<DeliveryStatus> statuses = (java.util.Collection<DeliveryStatus>) a[1];
+                    return attemptStore.stream()
+                            .filter(da -> da.getOrderId().equals(oid) && statuses.contains(da.getStatus()))
+                            .reduce((first, second) -> second);
+                }
+                case "findFirstByOrderIdOrderByIdDesc": {
+                    Long oid = (Long) a[0];
+                    return attemptStore.stream()
+                            .filter(da -> da.getOrderId().equals(oid))
+                            .reduce((first, second) -> second);
+                }
+                case "findByOrderIdOrderByIdAsc": {
+                    Long oid = (Long) a[0];
+                    return attemptStore.stream().filter(da -> da.getOrderId().equals(oid)).toList();
+                }
+                default:
+                    throw new UnsupportedOperationException(m.getName());
+            }
+        });
+
+        List<DeliveryOtp> otpStore = new ArrayList<>();
+        AtomicLong otpSeq = new AtomicLong(1);
+        DeliveryOtpRepository otpRepo = stub(DeliveryOtpRepository.class, (p, m, a) -> {
+            switch (m.getName()) {
+                case "save": {
+                    DeliveryOtp dotp = (DeliveryOtp) a[0];
+                    if (dotp.getId() == null) setId(dotp, otpSeq.getAndIncrement());
+                    if (!otpStore.contains(dotp)) otpStore.add(dotp);
+                    return dotp;
+                }
+                case "saveAll": {
+                    @SuppressWarnings("unchecked")
+                    List<DeliveryOtp> list = (List<DeliveryOtp>) a[0];
+                    for (DeliveryOtp o : list) {
+                        if (o.getId() == null) setId(o, otpSeq.getAndIncrement());
+                        if (!otpStore.contains(o)) otpStore.add(o);
+                    }
+                    return list;
+                }
+                case "findFirstByOrderIdAndStatusOrderByIdDesc": {
+                    Long oid = (Long) a[0];
+                    String st = (String) a[1];
+                    return otpStore.stream()
+                            .filter(o -> o.getOrderId().equals(oid) && st.equals(o.getStatus()))
+                            .reduce((first, second) -> second);
+                }
+                case "findByOrderIdAndStatus": {
+                    Long oid = (Long) a[0];
+                    String st = (String) a[1];
+                    return otpStore.stream().filter(o -> o.getOrderId().equals(oid) && st.equals(o.getStatus())).toList();
+                }
+                default:
+                    throw new UnsupportedOperationException(m.getName());
+            }
+        });
+
+        DeliveryEvidenceRepository evidenceRepo = stub(DeliveryEvidenceRepository.class, (p, m, a) -> {
+            if ("existsByDeliveryAttemptId".equals(m.getName())) return false;
+            throw new UnsupportedOperationException(m.getName());
+        });
+
+        DeliveryAuditLogRepository auditRepo = stub(DeliveryAuditLogRepository.class, (p, m, a) -> null);
+
+        ProofStorageProvider storageProvider = new ProofStorageProvider("LOCAL", "./data/private-uploads", 5242880L, "", "");
+        WhatsAppCloudApiProvider whatsappProvider = new WhatsAppCloudApiProvider(false, "", "", "", "v21.0", "");
+
+        DeliveryService deliveryService = new DeliveryService(
+                attemptRepo, orderRepo, userRepo, paymentService, paymentRepo,
+                otpRepo, evidenceRepo, auditRepo, storageProvider,
+                new BCryptPasswordEncoder(),
+                whatsappProvider,
+                30, 3, false
+        );
+
+        AtomicReference<String> capturedOtp = new AtomicReference<>();
+        deliveryService.setTestOtpCaptureListener((oid, code) -> capturedOtp.set(code));
+
+        // Delivery 1 (Order B): Confirm -> Pack -> Assign to Driver 1 -> Start -> Issue OTP -> Verify OTP -> Deliver
+        CustomerOrder realOrderB = orderStore.stream().filter(o -> o.getId().equals(orderB.id())).findFirst().orElseThrow();
+        realOrderB.setStatus(OrderStatus.PACKED);
+        realOrderB.setFinalTotal(new BigDecimal("180.00"));
+
+        deliveryService.assign(realOrderB.getId(), 3L, "9999999999"); // Driver 1
+        deliveryService.start(realOrderB.getId(), "9111111111");
+        assertEquals(OrderStatus.OUT_FOR_DELIVERY, realOrderB.getStatus());
+
+        var otpResult = deliveryService.issueOtp(realOrderB.getId(), "9111111111");
+        assertNotNull(capturedOtp.get());
+
+        // Incorrect OTP check
+        assertThrows(BadRequestException.class, () ->
+                deliveryService.verifyOtp(realOrderB.getId(), "999999", "9111111111"));
+
+        // Correct OTP check
+        var verified = deliveryService.verifyOtp(realOrderB.getId(), capturedOtp.get(), "9111111111");
+        assertTrue(verified.verified());
+
+        // Complete delivery
+        var delB = deliveryService.deliver(realOrderB.getId(),
+                new CollectionRequest(PaymentMethod.CASH, new BigDecimal("180.00"), null), "9111111111");
+        assertEquals(DeliveryStatus.DELIVERED, delB.status());
+        assertEquals(OrderStatus.DELIVERED, realOrderB.getStatus());
+
+        // Delivery 2 (Order D): Confirm -> Pack -> Assign to Driver 1 -> Reassign to Driver 2 -> Start -> OTP -> Deliver
+        CustomerOrder realOrderD = orderStore.stream().filter(o -> o.getId().equals(orderD.id())).findFirst().orElseThrow();
+        realOrderD.setStatus(OrderStatus.PACKED);
+        realOrderD.setFinalTotal(new BigDecimal("300.00"));
+
+        deliveryService.assign(realOrderD.getId(), 3L, "9999999999"); // Assign Driver 1
+        deliveryService.assign(realOrderD.getId(), 4L, "9999999999"); // Reassign Driver 2
+        assertEquals(DeliveryStatus.UNASSIGNED, attemptStore.get(1).getStatus(), "Driver 1 attempt revoked");
+        assertEquals(DeliveryStatus.ASSIGNED, attemptStore.get(2).getStatus(), "Driver 2 attempt assigned");
+
+        deliveryService.start(realOrderD.getId(), "9222222222"); // Driver 2 starts
+        deliveryService.issueOtp(realOrderD.getId(), "9222222222");
+        deliveryService.verifyOtp(realOrderD.getId(), capturedOtp.get(), "9222222222");
+        var delD = deliveryService.deliver(realOrderD.getId(),
+                new CollectionRequest(PaymentMethod.CASH, new BigDecimal("300.00"), null), "9222222222");
+        assertEquals(DeliveryStatus.DELIVERED, delD.status());
+
+        // --- 5. END OF DAY: Wastage & Stock Reconciliation ---
+        // 2.000 KG Tomato spoiled (damaged)
+        inventoryService.record(101L, MovementType.WASTAGE, new BigDecimal("2.000"), "Bruised during transit", "WASTAGE", null, staff.getPhone());
+
+        // Closing Stock Reconciliation for Tomato:
+        // Initial Purchase: 50.000 kg
+        // Order B: -2.000 kg
+        // Order D: -5.000 kg
+        // Sale 1: -0.500 kg
+        // Sale 3: -1.500 kg
+        // Sale 5: -1.000 kg
+        // Wastage: -2.000 kg
+        // Expected Closing Stock = 50 - 2 - 5 - 0.5 - 1.5 - 1 - 2 = 38.000 kg
+        assertEquals(new BigDecimal("38.000"), inventoryService.currentStock(101L));
+
+        // Wastage log verification
+        List<StockMovement> wastages = movementRepo.findWastageMovementsBetween(
+                LocalDate.now().atStartOfDay(), LocalDateTime.now());
+        assertEquals(1, wastages.size());
+        assertEquals(new BigDecimal("-2.000"), wastages.get(0).getQuantity());
+        assertEquals(MovementType.WASTAGE, wastages.get(0).getType());
     }
 }
