@@ -14,6 +14,9 @@ import { dec } from '@/lib/money'
 import { vegetableSlug } from '../vegetableImages'
 import type { PhotoAvailability } from '../usePhotoAvailability'
 import type { StaffCatalogItem, VegetableResponse } from '../types'
+import { deriveProductVisibility } from '../visibility'
+import { VisibilityStatusBlock } from './VisibilityStatusBadge'
+import type { QuickPriceTarget } from './QuickPriceDialog'
 
 interface CatalogCardsGridProps {
   items: VegetableResponse[]
@@ -22,6 +25,7 @@ interface CatalogCardsGridProps {
   isOwner: boolean
   onToggleAvail: (id: string | number, value: boolean) => void
   onToggleActive: (id: string | number, value: boolean) => void
+  onQuickPrice?: (target: QuickPriceTarget) => void
 }
 
 export function CatalogCardsGrid({
@@ -31,6 +35,7 @@ export function CatalogCardsGrid({
   isOwner,
   onToggleAvail,
   onToggleActive,
+  onQuickPrice,
 }: CatalogCardsGridProps) {
   const { t } = useTranslation()
   const { name, subtitle } = useVegetableName()
@@ -46,6 +51,12 @@ export function CatalogCardsGrid({
           dec(a.quantityInBaseUnit).cmp(dec(b.quantityInBaseUnit)),
         )
         const hasPhoto = photoStatuses[vegetableSlug(veg.nameEn)] === 'photo'
+        const visibility = deriveProductVisibility({
+          active: veg.active,
+          available: veg.available,
+          pricePerUnit,
+          stock: stockVal,
+        })
 
         return (
           <Card
@@ -142,6 +153,22 @@ export function CatalogCardsGrid({
                 quantity={stockVal}
                 unitLabel={unitLabel}
                 lowThreshold={getLowStockThreshold(veg.baseUnit)}
+              />
+
+              <VisibilityStatusBlock
+                visibility={visibility}
+                onQuickPrice={
+                  onQuickPrice
+                    ? () =>
+                        onQuickPrice({
+                          id: veg.id,
+                          name: name(veg),
+                          baseUnit: veg.baseUnit,
+                          currentPrice: pricePerUnit,
+                        })
+                    : undefined
+                }
+                onQuickEnableAvailable={() => onToggleAvail(veg.id, true)}
               />
 
               <div className="flex flex-wrap gap-1">

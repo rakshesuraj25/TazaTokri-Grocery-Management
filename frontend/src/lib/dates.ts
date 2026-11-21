@@ -57,6 +57,13 @@ export function currentHourIST(now: Date = new Date()): number {
   return Number(formatInTimeZone(now, IST, 'H'))
 }
 
+/** Get current minutes since midnight in IST (0-1439) for HH:mm cutoff checks. */
+export function currentMinutesIST(now: Date = new Date()): number {
+  const hhmm = formatInTimeZone(now, IST, 'HH:mm')
+  const [h, m] = hhmm.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
 /** Format duration in seconds as mm:ss countdown. */
 export function fmtCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60)

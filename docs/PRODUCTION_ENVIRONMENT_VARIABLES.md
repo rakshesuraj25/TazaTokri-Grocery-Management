@@ -55,8 +55,8 @@ These services are safely bypassed/disabled if credentials are not provided. The
 | Variable Name | Service | Default Value | Behavior When Unset |
 |---|---|---|---|
 | `RAZORPAY_KEY_ID` | Razorpay Payments | *(empty)* | Online payments disabled; COD available. |
-| `RAZORPAY_KEY_SECRET` | Razorpay Payments | *(empty)* | Online payment signature verification disabled. |
-| `RAZORPAY_WEBHOOK_SECRET` | Razorpay Webhooks | *(empty)* | Webhook signature verification disabled. |
+| `RAZORPAY_KEY_SECRET` | Razorpay Payments | *(empty)* | Must be set together with `RAZORPAY_KEY_ID` & `RAZORPAY_WEBHOOK_SECRET` in `prod`. |
+| `RAZORPAY_WEBHOOK_SECRET` | Razorpay Webhooks | *(empty)* | Must be set together with `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET` in `prod`. |
 | `WHATSAPP_ENABLED` | WhatsApp Cloud API | `false` | When `false`, order notifications write `SKIPPED` log. |
 | `WHATSAPP_PHONE_NUMBER_ID`| WhatsApp Cloud API | *(empty)* | Required if `WHATSAPP_ENABLED=true`. |
 | `WHATSAPP_ACCESS_TOKEN` | WhatsApp Cloud API | *(empty)* | Permanent or system-user Meta Graph API token. |
@@ -108,3 +108,31 @@ RAZORPAY_WEBHOOK_SECRET=
 WHATSAPP_ENABLED=false
 GEMINI_ENABLED=false
 ```
+
+---
+
+## 7. Local Development Setup (No Hardcoded Fallback Secrets)
+
+TazaTokri does **not** ship fallback passwords or JWT signing secrets in `application-dev.properties`.
+
+1. Copy `.env.example` to `.env` in the repository root (`.env` is gitignored):
+   ```bash
+   cp .env.example .env
+   ```
+2. Replace all `PLACEHOLDER_*` values in `.env` with your local development credentials (`DB_APP_PASSWORD`, `DB_PASSWORD`, `JWT_SECRET` `>= 32` chars, and `BOOTSTRAP_OWNER_PASSWORD` if no owner exists yet).
+3. `application-dev.properties` imports `optional:file:.env[.properties],optional:file:../.env[.properties]` automatically, or you can export them as environment variables before running `./mvnw spring-boot:run`.
+
+---
+
+## 8. Secret Rotation & Git Exposure Response
+
+### Routine / Incident Secret Rotation
+- **`JWT_SECRET`:** Generate a new `>= 32`-byte secret (`openssl rand -base64 32`), update `.env`, and restart `backend` (immediately invalidates all active JWTs).
+- **`DB_APP_PASSWORD` / `DB_ROOT_PASSWORD`:** Update the MySQL user password first, then update `.env` and recreate `mysql`/`backend`.
+- **`RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`:** Rotate in Razorpay Dashboard, update `.env`, and restart `backend`.
+- **`BACKUP_ENCRYPTION_PASSPHRASE`:** Update `.env` and offsite vault, then run a fresh `scripts/backup-mysql.sh` + `scripts/backup-uploads.sh`.
+
+### If a Secret Was Ever Committed to Git / GitHub
+1. **Treat the secret as compromised immediately.** Removing it in a new commit does **not** remove it from Git history.
+2. **Rotate/revoke** the exposed credential first (database passwords, JWT secret, API keys, passphrases).
+3. If an external private key or live credential was pushed to a shared/public repository, follow GitHub's history-cleanup procedure (`git filter-repo` / BFG Repo-Cleaner) with team coordination after rotation.

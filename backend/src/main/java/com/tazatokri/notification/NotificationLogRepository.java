@@ -3,6 +3,7 @@ package com.tazatokri.notification;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface NotificationLogRepository extends JpaRepository<NotificationLog, Long> {
@@ -12,4 +13,8 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
             NotificationChannel channel);
 
     List<NotificationLog> findByOrderIdOrderByCreatedAtDescIdDesc(Long orderId);
+
+    List<NotificationLog> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
+    List<NotificationLog> findByStatusOrderByCreatedAtDescIdDesc(NotificationStatus status, Pageable pageable);
 }

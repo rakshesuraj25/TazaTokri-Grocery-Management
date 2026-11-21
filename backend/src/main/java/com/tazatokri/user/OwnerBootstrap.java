@@ -39,14 +39,19 @@ public class OwnerBootstrap implements ApplicationRunner {
         if (userRepository.existsByRole(Role.OWNER)) {
             return;
         }
-        if (phone.isBlank() || password.isBlank()) {
+        if (phone == null || phone.isBlank() || password == null || password.isBlank()) {
             log.warn("No OWNER exists and bootstrap variables are not set. Nobody can manage the system.");
             return;
         }
+        String trimmedPassword = password.trim();
+        if (trimmedPassword.startsWith("PLACEHOLDER_") || "Owner@123".equals(trimmedPassword)) {
+            log.error("Refusing to create bootstrap OWNER with an insecure or placeholder password.");
+            return;
+        }
         User owner = new User();
-        owner.setFullName(name.isBlank() ? "Owner" : name);
-        owner.setPhone(phone);
-        owner.setPasswordHash(passwordEncoder.encode(password));
+        owner.setFullName(name == null || name.isBlank() ? "Owner" : name.trim());
+        owner.setPhone(phone.trim());
+        owner.setPasswordHash(passwordEncoder.encode(trimmedPassword));
         owner.setRoles(Set.of(Role.OWNER));
         userRepository.save(owner);
         log.info("Bootstrap OWNER created for phone {}", phone);

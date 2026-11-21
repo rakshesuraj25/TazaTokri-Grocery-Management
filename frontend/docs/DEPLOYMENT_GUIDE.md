@@ -46,12 +46,12 @@
 
 | Variable | Description | Default / Example | Required in Production |
 |---|---|---|---|
-| `DB_APP_PASSWORD` | Password for MySQL `tazatokri_app` user | `choose-a-long-password` | **YES** |
-| `DB_PASSWORD` | Password for MySQL `root` user | `root` | **YES** |
+| `DB_APP_PASSWORD` | Password for MySQL `tazatokri_app` user | *(set in `.env`)* | **YES** |
+| `DB_PASSWORD` | Password for MySQL `root` / Flyway user | *(set in `.env`)* | **YES** |
 | `JWT_SECRET` | 256-bit secret key for HMAC SHA-256 JWT signing | *Must be >= 32 chars* | **YES** |
 | `CORS_ALLOWED_ORIGINS` | Permitted web origins (comma-separated) | `https://shop.tazatokri.com` | **YES** |
 | `BOOTSTRAP_OWNER_PHONE`| Phone number for initial OWNER account | `9999999999` | Optional |
-| `BOOTSTRAP_OWNER_PASSWORD`| Initial password for OWNER bootstrap | `Owner@123` | Optional |
+| `BOOTSTRAP_OWNER_PASSWORD`| Initial password for OWNER bootstrap | *(set in `.env`)* | **YES (prod)** |
 | `RAZORPAY_KEY_ID` | Razorpay Merchant Key ID | `rzp_live_...` | For Online Payments |
 | `RAZORPAY_KEY_SECRET` | Razorpay Merchant Secret Key | `...` | For Online Payments |
 | `RAZORPAY_WEBHOOK_SECRET` | Secret for verifying Razorpay webhooks | `...` | For Online Payments |

@@ -3,16 +3,20 @@ import { Banknote, CheckCircle2, CreditCard, MapPin, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { EstimatedAmount, MoneyDisplay } from '@/components/MoneyDisplay'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
 import type { CartComboItem, CartItem } from '@/features/cart/types'
 import type { CustomerAddress } from '@/features/users/types'
+import type { CustomerLoyaltySummary } from '@/features/loyalty/api'
+import type { PromoPreview } from '@/features/retention/api'
 import {
-  FREE_DELIVERY_THRESHOLD,
-  MIN_ORDER_AMOUNT,
+  DEFAULT_STORE_RULES,
   isMinimumOrderMet,
   isSameDayDeliveryIST,
+  type StoreRules,
 } from '@/lib/businessRules'
 import { formatMoney, mulMoney, subMoney } from '@/lib/money'
 import type Decimal from 'decimal.js'
@@ -35,7 +39,7 @@ export function CheckoutStepBar({
   ]
 
   return (
-    <ol className="grid grid-cols-3 gap-2" aria-label={t('checkout.title')}>
+    <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label={t('checkout.title')}>
       {steps.map((s) => {
         const active = step === s.id
         const done = step > s.id
@@ -72,12 +76,14 @@ export function CheckoutAddressStep({
   activeStep,
   addresses,
   selectedAddressId,
+  serviceablePincodes = [],
   onSelectAddress,
   onAddAddress,
 }: {
   activeStep: boolean
   addresses: CustomerAddress[]
   selectedAddressId: string
+  serviceablePincodes?: string[]
   onSelectAddress: (id: string) => void
   onAddAddress: () => void
 }) {
@@ -102,6 +108,9 @@ export function CheckoutAddressStep({
         <div className="space-y-2" role="radiogroup" aria-label={t('checkout.deliveryAddress')}>
           {addresses.map((addr) => {
             const active = selectedAddressId === String(addr.id)
+            const unserviceable =
+              serviceablePincodes.length > 0 &&
+              !serviceablePincodes.includes(addr.pincode.trim())
             return (
               <button
                 key={String(addr.id)}
@@ -120,7 +129,14 @@ export function CheckoutAddressStep({
                     {addr.line2 ? `, ${addr.line2}` : ''} — {addr.pincode}
                   </p>
                 </div>
-                {addr.defaultAddress && <Badge variant="secondary">Default</Badge>}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {unserviceable && (
+                    <Badge variant="destructive">
+                      {t('addresses.unserviceable', { defaultValue: 'Not serviceable' })}
+                    </Badge>
+                  )}
+                  {addr.defaultAddress && <Badge variant="secondary">Default</Badge>}
+                </div>
               </button>
             )
           })}
@@ -199,6 +215,21 @@ export function CheckoutSummaryCard({
   subtotal,
   deliveryFee,
   estimatedTotal,
+  rules = DEFAULT_STORE_RULES,
+  loyalty,
+  redeemPointsInput = '',
+  onRedeemPointsChange,
+  maxRedeemPoints = 0,
+  redeemError = null,
+  loyaltyDiscount,
+  estimatedPointsEarned = 0,
+  promoInput = '',
+  onPromoInputChange,
+  appliedPromo = null,
+  promoError = null,
+  promoLoading = false,
+  onApplyPromo,
+  onRemovePromo,
   canPlace,
   isPending,
   onPlaceOrder,
@@ -209,13 +240,28 @@ export function CheckoutSummaryCard({
   subtotal: Decimal
   deliveryFee: Decimal
   estimatedTotal: Decimal
+  rules?: StoreRules
+  loyalty?: CustomerLoyaltySummary
+  redeemPointsInput?: string
+  onRedeemPointsChange?: (val: string) => void
+  maxRedeemPoints?: number
+  redeemError?: string | null
+  loyaltyDiscount?: Decimal
+  estimatedPointsEarned?: number
+  promoInput?: string
+  onPromoInputChange?: (val: string) => void
+  appliedPromo?: PromoPreview | null
+  promoError?: string | null
+  promoLoading?: boolean
+  onApplyPromo?: () => void
+  onRemovePromo?: () => void
   canPlace: boolean
   isPending: boolean
   onPlaceOrder: () => void
 }) {
   const { t } = useTranslation()
   const { name } = useVegetableName()
-  const isSameDay = isSameDayDeliveryIST()
+  const isSameDay = isSameDayDeliveryIST(new Date(), rules.cutoffTime)
 
   return (
     <Card className={`space-y-3 p-4 sm:p-5 ${activeStep ? 'ring-primary/25 ring-2' : ''}`}>
@@ -231,18 +277,18 @@ export function CheckoutSummaryCard({
         {isSameDay ? t('shop.cutoffBefore') : t('shop.cutoffAfter')}
       </p>
 
-      {!isMinimumOrderMet(subtotal) && (
+      {!isMinimumOrderMet(subtotal, rules) && (
         <p className="text-warning text-xs font-medium">
           {t('shop.minOrderHint', {
-            amount: formatMoney(subMoney(MIN_ORDER_AMOUNT, subtotal)),
+            amount: formatMoney(subMoney(rules.minOrder, subtotal)),
           })}
         </p>
       )}
 
-      {isMinimumOrderMet(subtotal) && subtotal.lt(FREE_DELIVERY_THRESHOLD) && (
+      {isMinimumOrderMet(subtotal, rules) && subtotal.lt(rules.freeDeliveryAbove) && (
         <p className="text-muted-foreground text-xs">
           {t('shop.freeDeliveryHint', {
-            amount: formatMoney(subMoney(FREE_DELIVERY_THRESHOLD, subtotal)),
+            amount: formatMoney(subMoney(rules.freeDeliveryAbove, subtotal)),
           })}
         </p>
       )}
@@ -278,6 +324,115 @@ export function CheckoutSummaryCard({
         ))}
       </ul>
 
+      {loyalty?.enabled && (
+        <div className="bg-secondary/40 space-y-2 rounded-xl border p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold">Loyalty Points ({loyalty.balance} pts available)</span>
+            <span className="text-muted-foreground">
+              1 pt = {formatMoney(loyalty.rupeesPerPoint)}
+            </span>
+          </div>
+          {onRedeemPointsChange && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="checkout-redeem-pts" className="sr-only">
+                Redeem loyalty points
+              </Label>
+              <Input
+                id="checkout-redeem-pts"
+                type="number"
+                min="0"
+                placeholder={`Min ${loyalty.minRedeemPoints} pts`}
+                value={redeemPointsInput}
+                onChange={(e) => onRedeemPointsChange(e.target.value)}
+                className="h-8 text-xs"
+              />
+              {maxRedeemPoints >= loyalty.minRedeemPoints && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0 text-xs"
+                  onClick={() => onRedeemPointsChange(String(maxRedeemPoints))}
+                >
+                  Use max ({maxRedeemPoints})
+                </Button>
+              )}
+              {redeemPointsInput && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 shrink-0 text-xs"
+                  onClick={() => onRedeemPointsChange('')}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+          {redeemError && (
+            <p role="alert" className="text-destructive text-xs font-medium">
+              {redeemError}
+            </p>
+          )}
+          {estimatedPointsEarned > 0 && (
+            <p className="text-primary font-medium">
+              You will earn ~{estimatedPointsEarned} pts on delivery
+            </p>
+          )}
+        </div>
+      )}
+
+      {onPromoInputChange && onApplyPromo && (
+        <div className="space-y-2 rounded-xl border p-3 text-xs">
+          <Label htmlFor="checkout-promo-code" className="font-bold">
+            Promo Code
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="checkout-promo-code"
+              placeholder="Enter promo code"
+              value={promoInput}
+              disabled={Boolean(appliedPromo) || promoLoading}
+              onChange={(e) => onPromoInputChange(e.target.value.toUpperCase())}
+              className="h-8 text-xs uppercase"
+            />
+            {appliedPromo ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 text-xs"
+                onClick={onRemovePromo}
+              >
+                Remove
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 text-xs"
+                disabled={!promoInput.trim() || promoLoading}
+                onClick={onApplyPromo}
+              >
+                {promoLoading ? 'Checking...' : 'Apply'}
+              </Button>
+            )}
+          </div>
+          {promoError && (
+            <p role="alert" className="text-destructive text-xs font-medium">
+              {promoError}
+            </p>
+          )}
+          {appliedPromo && (
+            <p className="text-primary font-medium">
+              Code {appliedPromo.code} applied (−{formatMoney(appliedPromo.discountAmount)})
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-1 border-t pt-2 text-sm" aria-live="polite">
         <div className="flex justify-between">
           <span className="text-muted-foreground">{t('cart.subtotal')}</span>
@@ -287,6 +442,18 @@ export function CheckoutSummaryCard({
           <span className="text-muted-foreground">{t('cart.deliveryFee')}</span>
           <EstimatedAmount value={deliveryFee.toFixed(2)} />
         </div>
+        {loyaltyDiscount && loyaltyDiscount.gt(0) && (
+          <div className="flex justify-between text-primary">
+            <span>Loyalty Discount</span>
+            <span>−{formatMoney(loyaltyDiscount.toNumber())}</span>
+          </div>
+        )}
+        {appliedPromo && appliedPromo.discountAmount > 0 && (
+          <div className="flex justify-between text-primary">
+            <span>Promo ({appliedPromo.code})</span>
+            <span>−{formatMoney(appliedPromo.discountAmount)}</span>
+          </div>
+        )}
         <div className="flex justify-between border-t pt-2 font-bold">
           <span>{t('cart.estimatedTotal')}</span>
           <EstimatedAmount

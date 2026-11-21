@@ -21,6 +21,7 @@ import { SavedBasketsSection } from '@/features/baskets/components/SavedBasketsS
 import { useCustomerOrders } from '@/features/orders/hooks'
 import { buildUsualVegetables } from '@/features/orders/orderAgain'
 import { useVegetableName } from '@/hooks/useVegetableName'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { estimateDeliveryFee } from '@/lib/businessRules'
 import { addMoney, mulMoney, sumMoney } from '@/lib/money'
 import { usePublicVegetables } from '../hooks'
@@ -45,6 +46,7 @@ export default function ShopPage() {
 
   const catalog = usePublicVegetables()
   const publicCombos = usePublicCombos()
+  const { settings } = usePublicStoreSettings()
   const pastOrders = useCustomerOrders(0, Boolean(user))
   const items = useCartStore((s) => s.items)
   const combos = useCartStore((s) => s.combos)
@@ -106,8 +108,8 @@ export default function ShopPage() {
     [itemsSubtotal, combosSubtotal],
   )
   const estimatedTotal = useMemo(
-    () => addMoney(subtotal, estimateDeliveryFee(subtotal)),
-    [subtotal],
+    () => addMoney(subtotal, estimateDeliveryFee(subtotal, settings)),
+    [subtotal, settings],
   )
   const totalCartLines =
     items.reduce((acc, i) => acc + i.count, 0) +
@@ -163,6 +165,17 @@ export default function ShopPage() {
     <div className="space-y-4 p-4 pb-28 lg:pb-8">
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_350px] lg:items-start lg:gap-6">
         <div className="min-w-0 space-y-5">
+          {!settings.storeOpen && (
+            <div
+              role="status"
+              className="bg-turmeric-light text-turmeric-foreground rounded-2xl border border-amber-300/70 px-4 py-3 text-sm font-medium"
+            >
+              {t('shop.storePausedBanner', {
+                defaultValue:
+                  'Store is currently paused for new online orders. You can still browse items; existing orders are unaffected.',
+              })}
+            </div>
+          )}
           <ShopHero featuredVegetables={catalog.data ?? []} />
 
           {Boolean(user) && category === 'ALL' && !search.trim() && (

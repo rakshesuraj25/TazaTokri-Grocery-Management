@@ -32,9 +32,15 @@ export default function PurchasesPage() {
   const isOwner = Boolean(user?.roles.includes('OWNER'))
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'' | 'COMPLETED' | 'CANCELLED'>('')
   const [view, setView] = useState<'cards' | 'table'>('cards')
 
-  const purchases = usePurchases(page, isOwner)
+  const purchases = usePurchases(
+    { page, from: fromDate || undefined, to: toDate || undefined, status: statusFilter || undefined },
+    isOwner,
+  )
   const list = useMemo(() => purchases.data ?? [], [purchases.data])
 
   const filtered = useMemo(() => {
@@ -44,14 +50,16 @@ export default function PurchasesPage() {
       (p) =>
         p.supplierName.toLowerCase().includes(q) ||
         p.purchaseDate.includes(q) ||
+        (p.invoiceNumber ?? '').toLowerCase().includes(q) ||
         p.items.some((item) => item.vegetableName.toLowerCase().includes(q)),
     )
   }, [list, search])
 
   const metrics = useMemo(() => {
-    const totalSpend = sumMoney(list.map((p) => p.totalCost))
-    const uniqueSuppliers = new Set(list.map((p) => String(p.supplierId))).size
-    const totalItems = list.reduce((sum, p) => sum + p.items.length, 0)
+    const active = list.filter((p) => p.status !== 'CANCELLED')
+    const totalSpend = sumMoney(active.map((p) => p.totalCost))
+    const uniqueSuppliers = new Set(active.map((p) => String(p.supplierId))).size
+    const totalItems = active.reduce((sum, p) => sum + p.items.length, 0)
     return { totalSpend, uniqueSuppliers, totalItems }
   }, [list])
 
@@ -152,8 +160,8 @@ export default function PurchasesPage() {
             />
           </div>
 
-          {list.length > 0 && (
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
               <Input
                 type="search"
@@ -161,7 +169,7 @@ export default function PurchasesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('staff.purchase.searchHint', {
-                  defaultValue: 'Search supplier or vegetable...',
+                  defaultValue: 'Search supplier, invoice, or vegetable...',
                 })}
                 aria-label={t('common.search')}
                 className="bg-card pr-10 pl-10"
@@ -177,7 +185,31 @@ export default function PurchasesPage() {
                 </button>
               )}
             </div>
-          )}
+            <Input
+              type="date"
+              aria-label="From date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-auto"
+            />
+            <Input
+              type="date"
+              aria-label="To date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-auto"
+            />
+            <select
+              aria-label="Filter status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as '' | 'COMPLETED' | 'CANCELLED')}
+              className="border-input bg-card h-10 rounded-lg border px-3 text-sm"
+            >
+              <option value="">All Status</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
 
           {list.length === 0 ? (
             <EmptyState

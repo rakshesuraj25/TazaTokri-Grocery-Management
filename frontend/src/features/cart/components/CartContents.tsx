@@ -9,12 +9,12 @@ import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
 import { useCartStore } from '@/features/cart/store'
 import {
-  FREE_DELIVERY_THRESHOLD,
   MAX_ITEM_COUNT,
-  MIN_ORDER_AMOUNT,
   estimateDeliveryFee,
   isMinimumOrderMet,
+  type StoreRules,
 } from '@/lib/businessRules'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { addMoney, dec, formatMoney, mulMoney, subMoney, sumMoney } from '@/lib/money'
 
 export interface CartContentsProps {
@@ -23,6 +23,7 @@ export interface CartContentsProps {
   prunedNames?: string[]
   onDismissPruned?: () => void
   compactListClassName?: string
+  rules?: StoreRules
 }
 
 export function CartContents({
@@ -31,9 +32,12 @@ export function CartContents({
   prunedNames = [],
   onDismissPruned,
   compactListClassName = 'max-h-72',
+  rules: rulesProp,
 }: CartContentsProps) {
   const { t } = useTranslation()
   const { name } = useVegetableName()
+  const { settings } = usePublicStoreSettings()
+  const rules = rulesProp ?? settings
   const items = useCartStore((s) => s.items)
   const combos = useCartStore((s) => s.combos)
   const updateCount = useCartStore((s) => s.updateCount)
@@ -44,13 +48,16 @@ export function CartContents({
   const itemsSubtotal = sumMoney(items.map((i) => mulMoney(i.pricePerUnit, i.count)))
   const combosSubtotal = sumMoney(combos.map((c) => mulMoney(c.sellingPrice, c.count)))
   const subtotal = addMoney(itemsSubtotal, combosSubtotal)
-  const deliveryFee = estimateDeliveryFee(subtotal)
+  const deliveryFee = estimateDeliveryFee(subtotal, rules)
   const estimatedTotal = addMoney(subtotal, deliveryFee)
-  const minProgress = Math.min(100, subtotal.div(MIN_ORDER_AMOUNT).mul(100).toNumber())
-  const freeProgress = Math.min(
-    100,
-    subtotal.div(FREE_DELIVERY_THRESHOLD).mul(100).toNumber(),
-  )
+  const minProgress =
+    rules.minOrder > 0
+      ? Math.min(100, subtotal.div(rules.minOrder).mul(100).toNumber())
+      : 100
+  const freeProgress =
+    rules.freeDeliveryAbove > 0
+      ? Math.min(100, subtotal.div(rules.freeDeliveryAbove).mul(100).toNumber())
+      : 100
 
   const isEmpty = items.length === 0 && combos.length === 0
 
@@ -92,23 +99,23 @@ export function CartContents({
       ) : (
         <div className="space-y-4">
           <div className="bg-secondary/60 space-y-1.5 rounded-xl p-3 text-xs">
-            {subtotal.lt(MIN_ORDER_AMOUNT) ? (
+            {subtotal.lt(rules.minOrder) ? (
               <>
                 <p className="font-semibold">
                   {t('shop.minOrderHint', {
-                    amount: formatMoney(subMoney(MIN_ORDER_AMOUNT, subtotal)),
+                    amount: formatMoney(subMoney(rules.minOrder, subtotal)),
                   })}
                 </p>
                 <Progress
                   value={minProgress}
-                  aria-label={t('shop.minOrderHint', { amount: formatMoney(MIN_ORDER_AMOUNT) })}
+                  aria-label={t('shop.minOrderHint', { amount: formatMoney(rules.minOrder) })}
                 />
               </>
-            ) : subtotal.lt(FREE_DELIVERY_THRESHOLD) ? (
+            ) : subtotal.lt(rules.freeDeliveryAbove) ? (
               <>
                 <p className="font-semibold">
                   {t('shop.freeDeliveryHint', {
-                    amount: formatMoney(subMoney(FREE_DELIVERY_THRESHOLD, subtotal)),
+                    amount: formatMoney(subMoney(rules.freeDeliveryAbove, subtotal)),
                   })}
                 </p>
                 <Progress value={freeProgress} aria-label={t('shop.freeDeliveryMet')} />
@@ -271,10 +278,20 @@ export function CartContents({
           </div>
 
           <div className="space-y-2">
+            {!rules.storeOpen && (
+              <p
+                role="status"
+                className="bg-turmeric-light text-turmeric-foreground rounded-xl px-3 py-2 text-xs font-medium"
+              >
+                {t('shop.storePausedNotice', {
+                  defaultValue: 'Store is currently paused for new online orders.',
+                })}
+              </p>
+            )}
             <Button
               size="xl"
               className="w-full"
-              disabled={!isMinimumOrderMet(subtotal)}
+              disabled={!rules.storeOpen || !isMinimumOrderMet(subtotal, rules)}
               onClick={onCheckout}
             >
               {t('cart.proceedToCheckout')}

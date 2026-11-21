@@ -38,6 +38,7 @@ import { NotificationPreferencesCard } from '@/features/notifications/components
 import { fmtDate } from '@/lib/dates'
 import { useCustomerAddresses } from '../hooks'
 import { AddAddressDialog } from '../components/AddAddressDialog'
+import { ChangePasswordForm } from '@/features/auth/components/ChangePasswordForm'
 
 export default function AccountPage() {
   const { t } = useTranslation()
@@ -156,6 +157,18 @@ export default function AccountPage() {
       </div>
 
       {/* WhatsApp Notification Consent & Language Preferences */}
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <p className="font-display text-sm font-bold">Loyalty & Rewards</p>
+          <p className="text-muted-foreground text-xs">
+            View your reward points balance and transaction history.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline" className="rounded-full">
+          <Link to="/shop/rewards">View Rewards</Link>
+        </Button>
+      </Card>
+
       <NotificationPreferencesCard />
 
       {/* Saved & Recurring Grocery Baskets */}
@@ -288,6 +301,13 @@ export default function AccountPage() {
           </div>
         </section>
       )}
+
+      <section className="space-y-2">
+        <h2 className="font-display text-base font-bold">Account security</h2>
+        <Card className="p-4 sm:p-5">
+          <ChangePasswordForm />
+        </Card>
+      </section>
 
       <AddAddressDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>

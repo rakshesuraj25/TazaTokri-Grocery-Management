@@ -1,6 +1,9 @@
 package com.tazatokri.auth;
 
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,6 +44,14 @@ public class AuthController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public UserResponse signup(@Valid @RequestBody CustomerSignupRequest request) {
 		return userService.registerCustomer(request);
+	}
+
+	@PostMapping("/change-password")
+	public Map<String, String> changePassword(
+			@Valid @RequestBody ChangePasswordRequest request,
+			Authentication auth) {
+		authService.changePassword(auth.getName(), request);
+		return Map.of("message", "Password updated successfully");
 	}
 
 }

@@ -21,7 +21,9 @@ import com.tazatokri.common.InvalidOrderStateException;
 import com.tazatokri.common.ResourceNotFoundException;
 import com.tazatokri.inventory.InventoryService;
 import com.tazatokri.inventory.MovementType;
+import com.tazatokri.loyalty.LoyaltyService;
 import com.tazatokri.payment.PaymentService;
+import com.tazatokri.retention.PromoOfferService;
 import com.tazatokri.user.UserRepository;
 
 @Service
@@ -43,6 +45,20 @@ public class OrderFlowService {
             );
 
     private final CustomerOrderRepository orders;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LoyaltyService loyaltyService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PromoOfferService promoOfferService;
+
+    public void setLoyaltyService(LoyaltyService loyaltyService) {
+        this.loyaltyService = loyaltyService;
+    }
+
+    public void setPromoOfferService(PromoOfferService promoOfferService) {
+        this.promoOfferService = promoOfferService;
+    }
     private final UserRepository users;
     private final InventoryService inventory;
     private final PaymentService paymentService;
@@ -216,7 +232,14 @@ public class OrderFlowService {
             itemsTotal = itemsTotal.add(item.getFinalLineTotal());
         }
 
-        o.setFinalTotal(itemsTotal.add(o.getDeliveryFee()));
+        BigDecimal loyaltyDiscount = o.getLoyaltyDiscountAmount() != null
+                ? o.getLoyaltyDiscountAmount()
+                : BigDecimal.ZERO;
+        BigDecimal promoDiscount = o.getPromoDiscountAmount() != null
+                ? o.getPromoDiscountAmount()
+                : BigDecimal.ZERO;
+        BigDecimal netItemsTotal = itemsTotal.subtract(loyaltyDiscount).subtract(promoDiscount).max(BigDecimal.ZERO);
+        o.setFinalTotal(netItemsTotal.add(o.getDeliveryFee()));
 
         o.setStatus(OrderStatus.PACKED);
 
@@ -312,6 +335,14 @@ public class OrderFlowService {
 
         // Queue the refund for the cancelled order.
         paymentService.queueRefund(o.getId(), BigDecimal.ZERO);
+
+        if (loyaltyService != null) {
+            loyaltyService.reverseForCancelledOrder(o);
+        }
+
+        if (promoOfferService != null && o.getPromoCode() != null && !o.getPromoCode().isBlank()) {
+            promoOfferService.releaseRedemptionForCancelledOrder(o.getId());
+        }
 
         return OrderResponse.from(o, true);
     }

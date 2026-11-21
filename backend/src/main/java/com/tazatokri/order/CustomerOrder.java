@@ -61,6 +61,18 @@ public class CustomerOrder {
     @Column(precision = 12, scale = 2)
     private BigDecimal finalTotal;        // filled at packing (step 18)
 
+    @Column(name = "loyalty_points_redeemed", nullable = false)
+    private int loyaltyPointsRedeemed = 0;
+
+    @Column(name = "loyalty_discount_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal loyaltyDiscountAmount = BigDecimal.ZERO;
+
+    @Column(name = "promo_code", length = 32)
+    private String promoCode;
+
+    @Column(name = "promo_discount_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal promoDiscountAmount = BigDecimal.ZERO;
+
     @Column(length = 255)
     private String cancelReason;
 

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toApiError } from '@/lib/api'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { useCreateAddress } from '../hooks'
 import type { CustomerAddress } from '../types'
 
@@ -41,6 +42,7 @@ interface AddAddressDialogProps {
 export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogProps) {
   const { t } = useTranslation()
   const createAddr = useCreateAddress()
+  const { settings } = usePublicStoreSettings()
   const [serverError, setServerError] = useState<string | null>(null)
 
   const {
@@ -68,6 +70,17 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
 
   const onSubmit = (values: AddressForm) => {
     setServerError(null)
+    const pin = values.pincode.trim()
+    if (settings.pincodes.length > 0 && !settings.pincodes.includes(pin)) {
+      setServerError(
+        t('addresses.unserviceablePincode', {
+          pincode: pin,
+          pincodes: settings.pincodes.join(', '),
+          defaultValue: `We do not deliver to PIN code ${pin} yet. Serviceable PINs: ${settings.pincodes.join(', ')}`,
+        }),
+      )
+      return
+    }
     createAddr.mutate(
       {
         label: values.label.trim(),
@@ -119,7 +132,7 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
             <Input id="addr-line2" {...register('line2')} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="addr-landmark">
                 {t('addresses.landmark')} ({t('common.optional')})
@@ -139,6 +152,14 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
               {errors.pincode?.message && (
                 <p role="alert" className="text-destructive text-xs font-medium">
                   {t(errors.pincode.message, { defaultValue: errors.pincode.message })}
+                </p>
+              )}
+              {settings.pincodes.length > 0 && (
+                <p className="text-muted-foreground text-[11px]">
+                  {t('addresses.serviceableList', {
+                    pincodes: settings.pincodes.join(', '),
+                    defaultValue: `Serviceable PINs: ${settings.pincodes.join(', ')}`,
+                  })}
                 </p>
               )}
             </div>

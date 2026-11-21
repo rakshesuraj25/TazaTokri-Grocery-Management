@@ -9,11 +9,9 @@ import { useAuthStore } from '@/features/auth/store'
 import { postLoginPath } from '@/features/auth/roles'
 import type { PublicVegetable } from '@/features/catalog/types'
 import {
-  DELIVERY_FEE,
-  FREE_DELIVERY_THRESHOLD,
-  MIN_ORDER_AMOUNT,
   isSameDayDeliveryIST,
 } from '@/lib/businessRules'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { fmtDate, todayIST } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 
@@ -32,7 +30,8 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
   const { t } = useTranslation()
   const { name } = useVegetableName()
   const user = useAuthStore((s) => s.user)
-  const isSameDay = isSameDayDeliveryIST()
+  const { settings } = usePublicStoreSettings()
+  const isSameDay = isSameDayDeliveryIST(new Date(), settings.cutoffTime)
   const pickedDate = fmtDate(todayIST())
 
   const liveHighlights = featuredVegetables.filter((v) => v.inStock).slice(0, 4)
@@ -119,8 +118,8 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
               <span className="inline-flex items-center gap-1.5">
                 <Truck className="text-turmeric size-4 shrink-0" aria-hidden />
                 {t('shop.minOrderRule', {
-                  amount: formatMoney(MIN_ORDER_AMOUNT),
-                  defaultValue: `Min. order ${formatMoney(MIN_ORDER_AMOUNT)}`,
+                  amount: formatMoney(settings.minOrder),
+                  defaultValue: `Min. order ${formatMoney(settings.minOrder)}`,
                 })}
               </span>
               <span aria-hidden className="text-white/40">
@@ -129,9 +128,9 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
               <span className="inline-flex items-center gap-1.5">
                 <ShieldCheck className="text-turmeric size-4 shrink-0" aria-hidden />
                 {t('shop.deliveryRule', {
-                  fee: formatMoney(DELIVERY_FEE),
-                  threshold: formatMoney(FREE_DELIVERY_THRESHOLD),
-                  defaultValue: `Delivery ${formatMoney(DELIVERY_FEE)} · Free above ${formatMoney(FREE_DELIVERY_THRESHOLD)}`,
+                  fee: formatMoney(settings.deliveryFee),
+                  threshold: formatMoney(settings.freeDeliveryAbove),
+                  defaultValue: `Delivery ${formatMoney(settings.deliveryFee)} · Free above ${formatMoney(settings.freeDeliveryAbove)}`,
                 })}
               </span>
             </div>

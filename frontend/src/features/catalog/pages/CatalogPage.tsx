@@ -13,6 +13,8 @@ import { ProductsTabs } from '../components/ProductsTabs'
 import { CatalogToolbar, type CatalogStatusFilter } from '../components/CatalogToolbar'
 import { CatalogCardsGrid } from '../components/CatalogCardsGrid'
 import { CatalogImportDialog } from '../components/CatalogImportDialog'
+import { QuickPriceDialog, type QuickPriceTarget } from '../components/QuickPriceDialog'
+import { deriveProductVisibility } from '../visibility'
 import { matchesVegetableSearch } from '../shopHelpers'
 import { usePhotoAvailability } from '../usePhotoAvailability'
 import type { SeedCatalogSummary } from '../defaultCatalog'
@@ -46,6 +48,7 @@ export default function CatalogPage() {
   const [statusFilter, setStatusFilter] = useState<CatalogStatusFilter>('all')
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [lastImportSummary, setLastImportSummary] = useState<SeedCatalogSummary | null>(null)
+  const [priceTarget, setPriceTarget] = useState<QuickPriceTarget | null>(null)
 
   const staffByVegId = useMemo(() => {
     const map = new Map<string, StaffCatalogItem>()
@@ -61,11 +64,35 @@ export default function CatalogPage() {
     return ['ALL', ...Array.from(set)]
   }, [vegetables.data])
 
+  const hiddenStockedCount = useMemo(() => {
+    let count = 0
+    for (const v of vegetables.data ?? []) {
+      const staffItem = staffByVegId.get(String(v.id))
+      const vis = deriveProductVisibility({
+        active: v.active,
+        available: v.available,
+        pricePerUnit: staffItem?.pricePerUnit ?? null,
+        stock: staffItem?.stock ?? '0',
+      })
+      if (vis.code === 'HIDDEN_STOCKED') count++
+    }
+    return count
+  }, [vegetables.data, staffByVegId])
+
   const filtered = useMemo(() => {
     return (vegetables.data ?? []).filter((v) => {
       if (catFilter !== 'ALL' && v.categoryName !== catFilter) return false
       const staffItem = staffByVegId.get(String(v.id))
       if (statusFilter === 'available' && !v.available) return false
+      if (statusFilter === 'hidden_stocked') {
+        const vis = deriveProductVisibility({
+          active: v.active,
+          available: v.available,
+          pricePerUnit: staffItem?.pricePerUnit ?? null,
+          stock: staffItem?.stock ?? '0',
+        })
+        if (vis.code !== 'HIDDEN_STOCKED') return false
+      }
       if (statusFilter === 'out' && dec(staffItem?.stock ?? '0').gt(0)) return false
       if (statusFilter === 'noprice' && staffItem?.pricePerUnit !== null) return false
       return matchesVegetableSearch(v, search)
@@ -184,6 +211,30 @@ export default function CatalogPage() {
         </div>
       )}
 
+      {hiddenStockedCount > 0 && statusFilter !== 'hidden_stocked' && (
+        <div
+          role="status"
+          className="border-turmeric/50 bg-turmeric-light/30 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 text-xs"
+        >
+          <span>
+            <strong>{hiddenStockedCount}</strong>{' '}
+            {hiddenStockedCount === 1
+              ? 'stocked item is hidden from the customer store'
+              : 'stocked items are hidden from the customer store'}{' '}
+            (missing selling price or Available Today is off).
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setStatusFilter('hidden_stocked')}
+            className="h-7 rounded-full px-3 text-xs"
+          >
+            Show hidden stocked
+          </Button>
+        </div>
+      )}
+
       <CatalogToolbar
         search={search}
         onSearchChange={setSearch}
@@ -224,8 +275,11 @@ export default function CatalogPage() {
           isOwner={isOwner}
           onToggleAvail={handleToggleAvail}
           onToggleActive={(id, value) => toggleActive.mutate({ id, value })}
+          onQuickPrice={setPriceTarget}
         />
       )}
+
+      <QuickPriceDialog target={priceTarget} onClose={() => setPriceTarget(null)} />
 
       <CatalogImportDialog
         open={importDialogOpen}

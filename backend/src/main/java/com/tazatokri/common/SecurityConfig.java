@@ -25,12 +25,15 @@ import com.tazatokri.auth.JwtAuthFilter;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final List<String> allowedOrigins;
 
     public SecurityConfig(
             JwtAuthFilter jwtAuthFilter,
+            RateLimitFilter rateLimitFilter,
             @Value("${app.cors.allowed-origins:http://localhost:5173}") String allowedOriginsCsv) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.allowedOrigins = Arrays.stream((allowedOriginsCsv == null ? "http://localhost:5173" : allowedOriginsCsv).split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -100,6 +103,10 @@ public class SecurityConfig {
             .addFilterBefore(
                 jwtAuthFilter,
                 UsernamePasswordAuthenticationFilter.class
+            )
+            .addFilterAfter(
+                rateLimitFilter,
+                JwtAuthFilter.class
             );
 
         return http.build();

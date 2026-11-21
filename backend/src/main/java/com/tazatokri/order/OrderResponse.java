@@ -9,14 +9,38 @@ public record OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paym
         LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
         String deliveryInstructions,
         BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
-        BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items) {
+        BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items,
+        int loyaltyPointsRedeemed, BigDecimal loyaltyDiscountAmount,
+        String promoCode, BigDecimal promoDiscountAmount) {
 
     public OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paymentMethod,
             LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
             BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
             BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items) {
         this(id, status, paymentMethod, deliveryDate, deliveryAddress, deliveryPincode, null,
-                subtotal, deliveryFee, estimatedTotal, finalTotal, createdAt, items);
+                subtotal, deliveryFee, estimatedTotal, finalTotal, createdAt, items,
+                0, BigDecimal.ZERO, null, BigDecimal.ZERO);
+    }
+
+    public OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paymentMethod,
+            LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
+            String deliveryInstructions,
+            BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
+            BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items) {
+        this(id, status, paymentMethod, deliveryDate, deliveryAddress, deliveryPincode,
+                deliveryInstructions, subtotal, deliveryFee, estimatedTotal, finalTotal,
+                createdAt, items, 0, BigDecimal.ZERO, null, BigDecimal.ZERO);
+    }
+
+    public OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paymentMethod,
+            LocalDate deliveryDate, String deliveryAddress, String deliveryPincode,
+            String deliveryInstructions,
+            BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal estimatedTotal,
+            BigDecimal finalTotal, LocalDateTime createdAt, List<Item> items,
+            int loyaltyPointsRedeemed, BigDecimal loyaltyDiscountAmount) {
+        this(id, status, paymentMethod, deliveryDate, deliveryAddress, deliveryPincode,
+                deliveryInstructions, subtotal, deliveryFee, estimatedTotal, finalTotal,
+                createdAt, items, loyaltyPointsRedeemed, loyaltyDiscountAmount, null, BigDecimal.ZERO);
     }
 
     public record Item(Long vegetableId, String vegetableName, BigDecimal quantity,
@@ -34,6 +58,10 @@ public record OrderResponse(Long id, OrderStatus status, OrderPaymentMethod paym
                 o.getDeliveryDate(), o.getDeliveryAddress(), o.getDeliveryPincode(),
                 o.getDeliveryInstructions(),
                 o.getSubtotal(), o.getDeliveryFee(), o.getEstimatedTotal(),
-                o.getFinalTotal(), o.getCreatedAt(), items);
+                o.getFinalTotal(), o.getCreatedAt(), items,
+                o.getLoyaltyPointsRedeemed(),
+                o.getLoyaltyDiscountAmount() != null ? o.getLoyaltyDiscountAmount() : BigDecimal.ZERO,
+                o.getPromoCode(),
+                o.getPromoDiscountAmount() != null ? o.getPromoDiscountAmount() : BigDecimal.ZERO);
     }
 }

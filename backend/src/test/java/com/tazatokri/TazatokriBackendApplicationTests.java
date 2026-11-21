@@ -1934,8 +1934,8 @@ class TazatokriBackendApplicationTests {
         assertFalse(errResponse.getBody().toString().contains("secret_table"));
         assertFalse(errResponse.getBody().toString().contains("SQL syntax error"));
 
-        // --- 4. JWT Dev Secret Validation & Token Expiry ---
-        JwtService jwtService = new JwtService(JwtService.DEFAULT_DEV_SECRET, 60);
+        // --- 4. JWT Secret Validation & Token Expiry ---
+        JwtService jwtService = new JwtService("test-isolated-jwt-secret-for-tests-only-must-be-32bytes-long", 60);
         User testUser = new User();
         setId(testUser, 99L);
         testUser.setPhone("9988776655");

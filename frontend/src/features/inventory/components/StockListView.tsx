@@ -17,6 +17,9 @@ import {
   type LowStockThresholds,
 } from '@/lib/businessRules'
 import { dec, formatQty } from '@/lib/money'
+import { deriveProductVisibility } from '@/features/catalog/visibility'
+import { VisibilityStatusBlock } from '@/features/catalog/components/VisibilityStatusBadge'
+import type { QuickPriceTarget } from '@/features/catalog/components/QuickPriceDialog'
 
 interface StockListViewProps {
   items: StaffCatalogItem[]
@@ -27,6 +30,7 @@ interface StockListViewProps {
   onWastage: (item: StaffCatalogItem) => void
   onAdjust: (item: StaffCatalogItem) => void
   onMovements: (item: StaffCatalogItem) => void
+  onQuickPrice?: (target: QuickPriceTarget) => void
 }
 
 export function StockListView({
@@ -38,6 +42,7 @@ export function StockListView({
   onWastage,
   onAdjust,
   onMovements,
+  onQuickPrice,
 }: StockListViewProps) {
   const { t } = useTranslation()
   const { name, subtitle } = useVegetableName()
@@ -60,6 +65,12 @@ export function StockListView({
               const isOut = dec(item.stock).lte(0)
               const isLow = isLowStock(item.stock, item.baseUnit, thresholds)
               const thresholdVal = getLowStockThreshold(item.baseUnit, thresholds)
+              const visibility = deriveProductVisibility({
+                active: true,
+                available: item.available,
+                pricePerUnit: item.pricePerUnit,
+                stock: item.stock,
+              })
 
               return (
                 <tr
@@ -87,6 +98,24 @@ export function StockListView({
                       ) : isLow ? (
                         <StatusBadge kind="stock" status="LOW_STOCK" />
                       ) : null}
+                    </div>
+                    <div className="mt-1.5">
+                      <VisibilityStatusBlock
+                        visibility={visibility}
+                        editTo={`/staff/catalog/${item.id}`}
+                        onQuickPrice={
+                          onQuickPrice
+                            ? () =>
+                                onQuickPrice({
+                                  id: item.id,
+                                  name: name(item),
+                                  baseUnit: item.baseUnit,
+                                  currentPrice: item.pricePerUnit,
+                                })
+                            : undefined
+                        }
+                        onQuickEnableAvailable={() => onToggleAvail(item.id, true)}
+                      />
                     </div>
                   </td>
                   <td className="min-w-36 px-3 py-2.5">
@@ -134,6 +163,12 @@ export function StockListView({
         const isOut = dec(item.stock).lte(0)
         const isLow = isLowStock(item.stock, item.baseUnit, thresholds)
         const thresholdVal = getLowStockThreshold(item.baseUnit, thresholds)
+        const visibility = deriveProductVisibility({
+          active: true,
+          available: item.available,
+          pricePerUnit: item.pricePerUnit,
+          stock: item.stock,
+        })
 
         return (
           <Card
@@ -195,6 +230,22 @@ export function StockListView({
                       </Link>
                     </div>
                   )}
+                  <VisibilityStatusBlock
+                    visibility={visibility}
+                    editTo={`/staff/catalog/${item.id}`}
+                    onQuickPrice={
+                      onQuickPrice
+                        ? () =>
+                            onQuickPrice({
+                              id: item.id,
+                              name: name(item),
+                              baseUnit: item.baseUnit,
+                              currentPrice: item.pricePerUnit,
+                            })
+                        : undefined
+                    }
+                    onQuickEnableAvailable={() => onToggleAvail(item.id, true)}
+                  />
                 </div>
               </div>
 

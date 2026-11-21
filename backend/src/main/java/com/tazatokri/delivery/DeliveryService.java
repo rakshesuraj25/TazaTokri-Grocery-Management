@@ -30,6 +30,7 @@ import com.tazatokri.delivery.DeliveryDtos.OtpIssueResponse;
 import com.tazatokri.delivery.DeliveryDtos.OtpVerifyResponse;
 import com.tazatokri.delivery.DeliveryDtos.StaffDeliveryBoardResponse;
 import com.tazatokri.delivery.DeliveryDtos.StaffDeliveryOrderItem;
+import com.tazatokri.loyalty.LoyaltyService;
 import com.tazatokri.notification.WhatsAppCloudApiProvider;
 import com.tazatokri.order.CustomerOrder;
 import com.tazatokri.order.CustomerOrderRepository;
@@ -65,6 +66,13 @@ public class DeliveryService {
 	private final int otpTtlMinutes;
 	private final int otpMaxAttempts;
 	private final boolean requirePodPhoto;
+
+	@Autowired(required = false)
+	private LoyaltyService loyaltyService;
+
+	public void setLoyaltyService(LoyaltyService loyaltyService) {
+		this.loyaltyService = loyaltyService;
+	}
 
 	/**
 	 * Package-private listener used strictly by isolated JUnit tests to inspect generated OTP codes
@@ -801,6 +809,9 @@ public class DeliveryService {
 		a.setFinishedAt(LocalDateTime.now());
 		o.setStatus(OrderStatus.DELIVERED);
 		invalidateActiveOtps(orderId);
+		if (loyaltyService != null) {
+			loyaltyService.awardForDeliveredOrder(o);
+		}
 
 		recordAudit(
 				orderId,

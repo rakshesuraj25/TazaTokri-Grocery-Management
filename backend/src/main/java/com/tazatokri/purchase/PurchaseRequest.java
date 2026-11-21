@@ -16,5 +16,7 @@ public record PurchaseRequest(
         @NotNull Long supplierId,
         @NotNull @PastOrPresent LocalDate purchaseDate,
         @NotNull @DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal transportCost,
+        @Size(max = 64) String invoiceNumber,
+        @Size(max = 64) String idempotencyKey,
         @Size(max = 255) String note,
         @NotEmpty @Valid List<PurchaseItemRequest> items) {}

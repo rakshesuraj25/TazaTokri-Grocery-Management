@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Banknote, Clock, Scale, Sprout, Truck } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { WeaveDivider } from '@/components/WeaveDivider'
-import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, MIN_ORDER_AMOUNT } from '@/lib/businessRules'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { formatMoney } from '@/lib/money'
 
 export function ShopTrustFooter() {
   const { t } = useTranslation()
+  const { settings } = usePublicStoreSettings()
 
   const pillars = [
     {
@@ -72,10 +73,10 @@ export function ShopTrustFooter() {
           <p className="text-muted-foreground flex items-center gap-1.5">
             <Truck className="text-primary size-3.5 shrink-0" aria-hidden />
             <span>
-              {t('shop.minOrderRule', { amount: formatMoney(MIN_ORDER_AMOUNT) })} ·{' '}
+              {t('shop.minOrderRule', { amount: formatMoney(settings.minOrder) })} ·{' '}
               {t('shop.deliveryRule', {
-                fee: formatMoney(DELIVERY_FEE),
-                threshold: formatMoney(FREE_DELIVERY_THRESHOLD),
+                fee: formatMoney(settings.deliveryFee),
+                threshold: formatMoney(settings.freeDeliveryAbove),
               })}
             </span>
           </p>

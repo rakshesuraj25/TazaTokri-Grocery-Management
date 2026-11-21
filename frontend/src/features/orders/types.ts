@@ -28,6 +28,8 @@ export interface PlaceOrderRequest {
   paymentMethod: OrderPaymentMethod
   items: PlaceOrderItemInput[]
   combos?: PlaceOrderComboInput[]
+  redeemPoints?: number
+  promoCode?: string
 }
 
 export interface OrderItemResponse {

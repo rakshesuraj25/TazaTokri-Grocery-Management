@@ -2,6 +2,7 @@
 package com.tazatokri.payment;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -129,4 +130,88 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id")
     Optional<Payment> findByIdForUpdate(@Param("id") Long id);
+
+    interface MethodTotal {
+        PaymentMethod getMethod();
+        Long getBills();
+        BigDecimal getTotal();
+    }
+
+    @Query("""
+        select p.method as method, count(p) as bills, coalesce(sum(p.amount), 0) as total
+        from Payment p
+        where p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.createdAt >= :from and p.createdAt < :to
+        group by p.method
+        """)
+    List<MethodTotal> sumSuccessfulCollectionsByMethodBetween(
+        @Param("from") LocalDateTime from,
+        @Param("to") LocalDateTime to
+    );
+
+    @Query("""
+        select coalesce(sum(p.amount), 0)
+        from Payment p
+        where p.method = com.tazatokri.payment.PaymentMethod.CASH
+          and p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.settledAt >= :from and p.settledAt < :to
+        """)
+    BigDecimal sumCashSettledBetween(
+        @Param("from") LocalDateTime from,
+        @Param("to") LocalDateTime to
+    );
+
+    @Query("""
+        select coalesce(sum(p.amount), 0)
+        from Payment p
+        where p.method = com.tazatokri.payment.PaymentMethod.CASH
+          and p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.settledAt is null
+        """)
+    BigDecimal sumPendingCashTotal();
+
+    @Query("""
+        select coalesce(sum(p.amount), 0)
+        from Payment p
+        where p.kind = com.tazatokri.payment.PaymentKind.REFUND
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.method = :method
+          and p.createdAt >= :from and p.createdAt < :to
+        """)
+    BigDecimal sumSuccessfulRefundsByMethodBetween(
+        @Param("method") PaymentMethod method,
+        @Param("from") LocalDateTime from,
+        @Param("to") LocalDateTime to
+    );
+
+    interface RiderCashSummary {
+        Long getCollectedBy();
+        BigDecimal getTotal();
+    }
+
+    @Query("""
+        select p.collectedBy as collectedBy, coalesce(sum(p.amount), 0) as total
+        from Payment p
+        where p.method = com.tazatokri.payment.PaymentMethod.CASH
+          and p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.collectedBy is not null
+        group by p.collectedBy
+        """)
+    List<RiderCashSummary> sumCashCollectedByRider();
+
+    @Query("""
+        select p.collectedBy as collectedBy, coalesce(sum(p.amount), 0) as total
+        from Payment p
+        where p.method = com.tazatokri.payment.PaymentMethod.CASH
+          and p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
+          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
+          and p.collectedBy is not null
+          and p.settledAt is not null
+        group by p.collectedBy
+        """)
+    List<RiderCashSummary> sumCashSettledByRider();
 }

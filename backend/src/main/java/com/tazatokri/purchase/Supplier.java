@@ -1,5 +1,7 @@
 package com.tazatokri.purchase;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -30,6 +32,15 @@ public class Supplier {
     @Column(length = 15)
     private String phone;
 
+    @Column(length = 255)
+    private String address;
+
+    @Column(length = 500)
+    private String notes;
+
     @Column(nullable = false)
     private boolean active = true;
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

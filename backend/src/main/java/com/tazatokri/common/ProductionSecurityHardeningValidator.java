@@ -7,19 +7,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
  * Validates critical production hardening constraints on application startup.
  * When the "prod" or "production" profile is active, this validator ensures:
- * 1. Database password is set and not the default dev placeholder.
- * 2. Flyway password is set and not the default dev placeholder.
- * 3. JWT secret is set, is at least 32 bytes (256 bits), and is NOT the default dev secret.
- * 4. Bootstrap owner password is set and is NOT the default "Owner@123".
+ * 1. Database password is set and not a known legacy/default placeholder.
+ * 2. Flyway password is set and not a known legacy/default placeholder.
+ * 3. JWT secret is set, is at least 32 bytes (256 bits), and is NOT a known insecure secret.
+ * 4. Bootstrap owner password is set and is NOT a predictable default.
  * 5. Restrictive CORS origins are explicitly configured.
  */
 @Component
+@Order(0)
 public class ProductionSecurityHardeningValidator implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ProductionSecurityHardeningValidator.class);

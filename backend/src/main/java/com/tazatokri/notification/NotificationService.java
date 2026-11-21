@@ -7,7 +7,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,8 @@ import com.tazatokri.user.UserRepository;
 
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationPreferenceRepository preferences;
     private final NotificationLogRepository logs;
@@ -68,22 +73,31 @@ public class NotificationService {
     public record NotificationLogDto(
             Long id,
             Long orderId,
+            Long customerId,
             NotificationEventType eventType,
             NotificationChannel channel,
             NotificationLanguage language,
             NotificationStatus status,
+            String errorDetail,
             LocalDateTime createdAt) {
         public static NotificationLogDto from(NotificationLog log) {
             return new NotificationLogDto(
                     log.getId(),
                     log.getOrderId(),
+                    log.getCustomerId(),
                     log.getEventType(),
                     log.getChannel(),
                     log.getLanguage(),
                     log.getStatus(),
+                    log.getErrorDetail(),
                     log.getCreatedAt());
         }
     }
+
+    public record ProviderStatusDto(
+            boolean cloudApiEnabled,
+            String shopSupportPhone,
+            boolean hasBusinessAccountId) {}
 
     @Transactional(readOnly = true)
     public PreferenceDto getPreference(String userPhone) {
@@ -275,6 +289,62 @@ public class NotificationService {
                 .stream()
                 .map(NotificationLogDto::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ProviderStatusDto getProviderStatus() {
+        return new ProviderStatusDto(
+                cloudProvider.isConfiguredAndEnabled(),
+                shopSupportPhone,
+                cloudProvider.getBusinessAccountId() != null && !cloudProvider.getBusinessAccountId().isBlank());
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationLogDto> listRecentLogs(NotificationStatus status) {
+        var page = PageRequest.of(0, 50);
+        List<NotificationLog> rows = status != null
+                ? logs.findByStatusOrderByCreatedAtDescIdDesc(status, page)
+                : logs.findAllByOrderByCreatedAtDescIdDesc(page);
+        return rows.stream().map(NotificationLogDto::from).toList();
+    }
+
+    @Transactional
+    public NotificationLogDto retryFailedNotification(Long logId) {
+        NotificationLog entry = logs.findById(logId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification log not found: " + logId));
+        if (entry.getStatus() != NotificationStatus.FAILED) {
+            throw new BadRequestException("Only FAILED notifications can be retried");
+        }
+        if (entry.getChannel() != NotificationChannel.WHATSAPP_CLOUD_API || !cloudProvider.isConfiguredAndEnabled()) {
+            throw new BadRequestException("WhatsApp Cloud API is not enabled for retry");
+        }
+        if (entry.getErrorDetail() != null && entry.getErrorDetail().toLowerCase().contains("invalid recipient phone")) {
+            throw new BadRequestException("Cannot retry permanent failure: invalid recipient phone");
+        }
+
+        CustomerOrder order = orders.findWithDetailsById(entry.getOrderId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + entry.getOrderId()));
+        User customer = users.findById(entry.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        BigDecimal bill = order.getFinalTotal() != null ? order.getFinalTotal() : order.getEstimatedTotal();
+        String message = OrderMessageTemplates.formatOrderMessage(
+                entry.getEventType(), entry.getLanguage(), order.getId(), customer.getFullName(), bill);
+
+        WhatsAppCloudApiProvider.CloudSendResult sendRes =
+                cloudProvider.sendTemplateOrText(customer.getPhone(), message);
+        entry.setStatus(sendRes.status());
+        entry.setProviderMessageId(sendRes.providerMessageId());
+        entry.setErrorDetail(sendRes.errorDetail());
+        return NotificationLogDto.from(logs.save(entry));
+    }
+
+    public void notifyOrderStatusSafely(Long orderId, OrderStatus status) {
+        try {
+            triggerOrderEventNotification(orderId, mapStatusToEvent(status), null);
+        } catch (Exception ex) {
+            log.warn("Non-blocking notification dispatch skipped for order #{}: {}", orderId, ex.getMessage());
+        }
     }
 
     public static NotificationEventType mapStatusToEvent(OrderStatus status) {

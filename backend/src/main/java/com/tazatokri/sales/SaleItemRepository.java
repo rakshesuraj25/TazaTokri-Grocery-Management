@@ -26,4 +26,20 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
            order by sum(i.lineTotal) desc
            """)
     List<TopItem> topItems(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    interface ShopSaleDemand {
+        Long getVegetableId();
+        Long getSaleCount();
+        BigDecimal getQty();
+    }
+
+    @Query("""
+           select i.vegetable.id as vegetableId,
+                  count(distinct i.sale.id) as saleCount,
+                  coalesce(sum(i.quantity), 0) as qty
+           from SaleItem i
+           where i.sale.createdAt >= :from and i.sale.createdAt < :to
+           group by i.vegetable.id
+           """)
+    List<ShopSaleDemand> summarizeShopSalesBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

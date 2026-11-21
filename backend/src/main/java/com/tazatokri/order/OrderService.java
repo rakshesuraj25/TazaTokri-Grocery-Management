@@ -2,6 +2,7 @@ package com.tazatokri.order;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,8 +32,10 @@ import com.tazatokri.common.ResourceNotFoundException;
 import com.tazatokri.delivery.DeliveryRules;
 import com.tazatokri.inventory.InventoryService;
 import com.tazatokri.inventory.MovementType;
+import com.tazatokri.loyalty.LoyaltyService;
 import com.tazatokri.pricing.VegetablePrice;
 import com.tazatokri.pricing.VegetablePriceRepository;
+import com.tazatokri.retention.PromoOfferService;
 import com.tazatokri.user.Address;
 import com.tazatokri.user.AddressRepository;
 import com.tazatokri.user.UserRepository;
@@ -48,6 +51,21 @@ public class OrderService {
     private final InventoryService inventory;
     private final DeliveryRules rules;
     private final ComboRepository combos;
+    private final Clock clock;
+
+    @Autowired(required = false)
+    private LoyaltyService loyaltyService;
+
+    @Autowired(required = false)
+    private PromoOfferService promoOfferService;
+
+    public void setLoyaltyService(LoyaltyService loyaltyService) {
+        this.loyaltyService = loyaltyService;
+    }
+
+    public void setPromoOfferService(PromoOfferService promoOfferService) {
+        this.promoOfferService = promoOfferService;
+    }
 
     public OrderService(
             CustomerOrderRepository orders,
@@ -57,7 +75,19 @@ public class OrderService {
             VegetablePriceRepository prices,
             InventoryService inventory,
             DeliveryRules rules) {
-        this(orders, users, addresses, vegetables, prices, inventory, rules, null);
+        this(orders, users, addresses, vegetables, prices, inventory, rules, null, Clock.system(DeliveryRules.IST));
+    }
+
+    public OrderService(
+            CustomerOrderRepository orders,
+            UserRepository users,
+            AddressRepository addresses,
+            VegetableRepository vegetables,
+            VegetablePriceRepository prices,
+            InventoryService inventory,
+            DeliveryRules rules,
+            ComboRepository combos) {
+        this(orders, users, addresses, vegetables, prices, inventory, rules, combos, Clock.system(DeliveryRules.IST));
     }
 
     @Autowired
@@ -69,7 +99,8 @@ public class OrderService {
             VegetablePriceRepository prices,
             InventoryService inventory,
             DeliveryRules rules,
-            ComboRepository combos) {
+            ComboRepository combos,
+            Clock clock) {
 
         this.orders = orders;
         this.users = users;
@@ -79,6 +110,7 @@ public class OrderService {
         this.inventory = inventory;
         this.rules = rules;
         this.combos = combos;
+        this.clock = clock != null ? clock : Clock.system(DeliveryRules.IST);
     }
 
     @Transactional
@@ -104,6 +136,10 @@ public class OrderService {
         List<PlaceOrderRequest.OrderComboRequest> reqCombos = req.combos() == null ? List.of() : req.combos();
         if (reqItems.isEmpty() && reqCombos.isEmpty()) {
             throw new BadRequestException("Order must contain at least one item or combo");
+        }
+
+        if (!rules.isStoreOpen()) {
+            throw new BadRequestException("Store is currently paused for new online orders");
         }
 
         // 3. Validate address ownership and delivery serviceability.
@@ -278,18 +314,50 @@ public class OrderService {
             );
         }
 
-        // 8. Calculate delivery fee, total and delivery date.
+        // 8. Calculate delivery fee, optional loyalty & promo redemptions, total and delivery date.
         BigDecimal fee = rules.feeFor(subtotal);
+        int requestedRedeem = req.redeemPoints() != null ? req.redeemPoints() : 0;
+        LoyaltyService.RedemptionCalculation redemption = new LoyaltyService.RedemptionCalculation(
+                0, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        if (requestedRedeem > 0) {
+            if (loyaltyService == null) {
+                throw new BadRequestException("Loyalty rewards program is not available");
+            }
+            redemption = loyaltyService.validateAndLockForRedemption(customerId, requestedRedeem, subtotal);
+        }
+
+        PromoOfferService.AppliedPromo appliedPromo = null;
+        if (req.promoCode() != null && !req.promoCode().isBlank()) {
+            if (promoOfferService == null) {
+                throw new BadRequestException("Promotional offers are not available");
+            }
+            appliedPromo = promoOfferService.validateAndLockForOrder(
+                    req.promoCode(), customerId, subtotal, redemption.discountAmount());
+        }
+        BigDecimal promoDiscount = appliedPromo != null
+                ? appliedPromo.discountAmount()
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
         order.setSubtotal(subtotal);
         order.setDeliveryFee(fee);
-        order.setEstimatedTotal(subtotal.add(fee));
+        order.setLoyaltyPointsRedeemed(redemption.pointsRedeemed());
+        order.setLoyaltyDiscountAmount(redemption.discountAmount());
+        order.setPromoCode(appliedPromo != null ? appliedPromo.code() : null);
+        order.setPromoDiscountAmount(promoDiscount);
+        BigDecimal netItems = subtotal.subtract(redemption.discountAmount()).subtract(promoDiscount).max(BigDecimal.ZERO);
+        order.setEstimatedTotal(netItems.add(fee));
         order.setDeliveryDate(
-                rules.deliveryDateFor(LocalDateTime.now())
+                rules.deliveryDateFor(LocalDateTime.now(clock.withZone(DeliveryRules.IST)))
         );
 
         // 9. Save order to generate its database ID.
         CustomerOrder saved = orders.save(order);
+        if (redemption.pointsRedeemed() > 0 && loyaltyService != null) {
+            loyaltyService.recordRedemptionForOrder(customerId, saved.getId(), redemption);
+        }
+        if (appliedPromo != null && promoOfferService != null) {
+            promoOfferService.recordRedemption(appliedPromo, customerId, saved.getId());
+        }
 
         // 10. Record inventory movements (in sorted vegetable ID order, validating stock with pessimistic locks).
         for (OrderItem item : saved.getItems()) {

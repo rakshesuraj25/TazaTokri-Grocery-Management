@@ -79,9 +79,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-LOCAL}
       STORAGE_LOCAL_DIR: /app/data/private-uploads
+      APP_BACKUP_DIR: /app/data/backups
       BACKUP_STATUS_FILE: /app/data/backup-status/backup-status.json
     volumes:
       - ./backend/data/private-uploads:/app/data/private-uploads
+      - ./backend/data/backups:/app/data/backups
       - ./backend/data/backup-status:/app/data/backup-status:ro
     depends_on:
       mysql:

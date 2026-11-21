@@ -1,5 +1,7 @@
 import { api } from '@/lib/api'
 import type {
+  ChangePasswordRequest,
+  ChangePasswordResponse,
   LoginRequest,
   LoginResponse,
   MeResponse,
@@ -15,6 +17,9 @@ export const authApi = {
 
   /** OWNER only */
   register: (body: RegisterRequest) => api.post<UserResponse>('/api/auth/register', body),
+
+  changePassword: (body: ChangePasswordRequest) =>
+    api.post<ChangePasswordResponse>('/api/auth/change-password', body),
 
   me: () => api.get<MeResponse>('/api/me'),
 }

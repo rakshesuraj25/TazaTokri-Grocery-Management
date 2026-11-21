@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,18 +33,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
 
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+            String token = header.substring(7).trim();
 
-            if (jwtService.isValid(token)) {
-                Claims claims = jwtService.parseToken(token);
-                List<SimpleGrantedAuthority> authorities = jwtService.extractRoles(claims).stream()
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                        .toList();
+            if (!token.isEmpty()) {
+                try {
+                    Claims claims = jwtService.parseToken(token);
+                    String subject = claims.getSubject();
+                    if (subject != null && !subject.isBlank()) {
+                        List<SimpleGrantedAuthority> authorities = jwtService.extractRoles(claims).stream()
+                                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                                .toList();
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(subject, null, authorities);
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                } catch (JwtException | IllegalArgumentException ex) {
+                    SecurityContextHolder.clearContext();
+                }
             }
         }
 

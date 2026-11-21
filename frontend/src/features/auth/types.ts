@@ -53,3 +53,12 @@ export interface MeResponse {
   userId?: number
   fullName?: string
 }
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+export interface ChangePasswordResponse {
+  message: string
+}

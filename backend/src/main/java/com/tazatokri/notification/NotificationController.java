@@ -66,4 +66,23 @@ public class NotificationController {
             @PathVariable Long orderId) {
         return service.listLogsForOrder(orderId);
     }
+
+    @GetMapping("/api/owner/notifications/status")
+    @PreAuthorize("hasRole('OWNER')")
+    public NotificationService.ProviderStatusDto providerStatus() {
+        return service.getProviderStatus();
+    }
+
+    @GetMapping("/api/owner/notifications/logs")
+    @PreAuthorize("hasRole('OWNER')")
+    public List<NotificationService.NotificationLogDto> listRecentLogs(
+            @RequestParam(required = false) NotificationStatus status) {
+        return service.listRecentLogs(status);
+    }
+
+    @PostMapping("/api/owner/notifications/logs/{logId}/retry")
+    @PreAuthorize("hasRole('OWNER')")
+    public NotificationService.NotificationLogDto retryNotification(@PathVariable Long logId) {
+        return service.retryFailedNotification(logId);
+    }
 }

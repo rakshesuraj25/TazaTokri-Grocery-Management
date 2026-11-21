@@ -35,4 +35,20 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
            """)
     List<PaymentSummary> summarizeByPayment(@Param("from") LocalDateTime from,
                                             @Param("to") LocalDateTime to);
+
+    interface DailySaleSummary {
+        Object getDay();
+        Long getBills();
+        BigDecimal getTotal();
+    }
+
+    @Query("""
+           select function('date', s.createdAt) as day, count(s) as bills,
+                  coalesce(sum(s.totalAmount), 0) as total
+           from Sale s
+           where s.createdAt >= :from and s.createdAt < :to
+           group by function('date', s.createdAt)
+           """)
+    List<DailySaleSummary> summarizeDailySalesBetween(@Param("from") LocalDateTime from,
+                                                      @Param("to") LocalDateTime to);
 }

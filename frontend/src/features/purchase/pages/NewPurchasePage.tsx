@@ -43,6 +43,7 @@ const purchaseSchema = z
       .string()
       .trim()
       .refine((v) => isValidDecimal(v, 2) && dec(v).gte(0), 'Invalid'),
+    invoiceNumber: z.string().trim().max(64).optional(),
     note: z.string().trim().max(200).optional(),
     items: z.array(itemSchema).min(1),
   })
@@ -59,10 +60,15 @@ type PurchaseFormValues = z.infer<typeof purchaseSchema>
 export default function NewPurchasePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const suppliers = useSuppliers()
+  const suppliers = useSuppliers(true)
   const vegetables = useVegetables()
   const createPurchase = useCreatePurchase()
   const [serverError, setServerError] = useState<string | null>(null)
+  const [idempotencyKey] = useState(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `pur-${Date.now()}-${Math.random()}`,
+  )
 
   const {
     register,
@@ -77,6 +83,7 @@ export default function NewPurchasePage() {
       supplierId: 0,
       purchaseDate: todayIST(),
       transportCost: '0',
+      invoiceNumber: '',
       note: '',
       items: [{ vegetableId: 0, quantity: '', ratePerUnit: '' }],
     },
@@ -129,6 +136,8 @@ export default function NewPurchasePage() {
         supplierId: values.supplierId,
         purchaseDate: values.purchaseDate,
         transportCost: toApiMoney(values.transportCost),
+        invoiceNumber: values.invoiceNumber?.trim() || undefined,
+        idempotencyKey,
         note: values.note?.trim() || undefined,
         items: values.items.map((i) => ({
           vegetableId: i.vegetableId,
@@ -170,7 +179,7 @@ export default function NewPurchasePage() {
             </p>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="pur-supplier">{t('staff.purchase.supplier')}</Label>
               <select
@@ -195,6 +204,15 @@ export default function NewPurchasePage() {
                 max={todayIST()}
                 aria-invalid={!!errors.purchaseDate}
                 {...register('purchaseDate')}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="pur-invoice">Invoice / Ref #</Label>
+              <Input
+                id="pur-invoice"
+                placeholder="e.g. INV-101"
+                {...register('invoiceNumber')}
               />
             </div>
 

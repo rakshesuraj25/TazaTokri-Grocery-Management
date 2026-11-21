@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { authApi } from './api'
 import { normalizeRoles, postLoginPath } from './roles'
 import { useAuthStore } from './store'
-import type { LoginRequest, SignupRequest } from './types'
+import type { ChangePasswordRequest, LoginRequest, SignupRequest } from './types'
 
 export const authKeys = {
   me: ['auth', 'me'] as const,
@@ -98,4 +98,10 @@ export function useLogout() {
     navigate('/login', { replace: true })
     toast.info(t('auth.loggedOut'))
   }
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (data: ChangePasswordRequest) => authApi.changePassword(data),
+  })
 }

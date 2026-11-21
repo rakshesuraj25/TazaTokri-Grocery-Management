@@ -86,7 +86,7 @@ export default function PaymentsPage() {
   }
 
   const handleConfirmSettle = () => {
-    if (!settleTarget) return
+    if (!settleTarget || settleCash.isPending) return
     setDialogError(null)
     if (!dec(receivedAmount).eq(dec(settleTarget.amount))) {
       setDialogError(t('delivery.amountMismatch', { amount: settleTarget.amount }))

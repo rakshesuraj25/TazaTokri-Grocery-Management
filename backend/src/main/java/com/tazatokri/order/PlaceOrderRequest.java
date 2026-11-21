@@ -14,14 +14,35 @@ public record PlaceOrderRequest(
         @NotNull Long addressId,
         @NotNull OrderPaymentMethod paymentMethod,
         @Valid List<OrderItemRequest> items,
-        @Valid List<OrderComboRequest> combos) {
+        @Valid List<OrderComboRequest> combos,
+        @Min(0) Integer redeemPoints,
+        @Size(max = 32) String promoCode) {
 
     public PlaceOrderRequest(
             String clientRef,
             Long addressId,
             OrderPaymentMethod paymentMethod,
             List<OrderItemRequest> items) {
-        this(clientRef, addressId, paymentMethod, items, List.of());
+        this(clientRef, addressId, paymentMethod, items, List.of(), null, null);
+    }
+
+    public PlaceOrderRequest(
+            String clientRef,
+            Long addressId,
+            OrderPaymentMethod paymentMethod,
+            List<OrderItemRequest> items,
+            List<OrderComboRequest> combos) {
+        this(clientRef, addressId, paymentMethod, items, combos, null, null);
+    }
+
+    public PlaceOrderRequest(
+            String clientRef,
+            Long addressId,
+            OrderPaymentMethod paymentMethod,
+            List<OrderItemRequest> items,
+            List<OrderComboRequest> combos,
+            Integer redeemPoints) {
+        this(clientRef, addressId, paymentMethod, items, combos, redeemPoints, null);
     }
 
     public record OrderComboRequest(

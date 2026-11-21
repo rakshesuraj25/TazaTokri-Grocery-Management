@@ -2,6 +2,10 @@ node_modules
 dist
 target/
 .env
+.env.*
+!.env.example
+!frontend/.env.example
+!frontend/.env.production
 *.local
 .metadata/
 *.tsbuildinfo
@@ -17,3 +21,13 @@ infra/certbot/
 backend/data/
 *.sql.gz
 *.sql.gz.enc
+*.tar.gz.enc
+*.sha256
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p12
+*.jks
+*.log

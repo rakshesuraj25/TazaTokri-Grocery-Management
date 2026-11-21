@@ -51,6 +51,7 @@ import { StockListView } from '../components/StockListView'
 import { WastageReportPanel } from '../components/WastageReportPanel'
 import { BusinessIntelligencePanel } from '@/features/report/components/BusinessIntelligencePanel'
 import { buildWhatsAppRestockText } from '../restockHelpers'
+import { QuickPriceDialog, type QuickPriceTarget } from '@/features/catalog/components/QuickPriceDialog'
 
 function safeStockDec(value: string | number | null | undefined) {
   try {
@@ -84,6 +85,7 @@ export default function StockPage() {
   const [wastageTarget, setWastageTarget] = useState<StaffCatalogItem | null>(null)
   const [adjustTarget, setAdjustTarget] = useState<StaffCatalogItem | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<StaffCatalogItem | null>(null)
+  const [priceTarget, setPriceTarget] = useState<QuickPriceTarget | null>(null)
 
   const rawItems = useMemo(
     () => (Array.isArray(catalog.data) ? catalog.data : []),
@@ -434,9 +436,11 @@ export default function StockPage() {
           onWastage={setWastageTarget}
           onAdjust={setAdjustTarget}
           onMovements={setMovementsTarget}
+          onQuickPrice={setPriceTarget}
         />
       )}
 
+      <QuickPriceDialog target={priceTarget} onClose={() => setPriceTarget(null)} />
       <WastageDialog vegetable={wastageTarget} onClose={() => setWastageTarget(null)} />
       <AdjustmentDialog vegetable={adjustTarget} onClose={() => setAdjustTarget(null)} />
       <StockMovementsSheet

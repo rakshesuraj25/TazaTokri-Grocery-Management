@@ -4,7 +4,7 @@
  * These constants are for display-only hints in the UI.
  */
 import type Decimal from 'decimal.js'
-import { currentHourIST } from './dates'
+import { currentMinutesIST } from './dates'
 import { dec, type Decimalish } from './money'
 
 /** Minimum order value in rupees for delivery (server is the authority). */
@@ -144,30 +144,63 @@ export const PAYMENT_POLL_MAX_MS = 60000
 /** IST timezone string. */
 export const IST_TIMEZONE = 'Asia/Kolkata'
 
-/**
- * Display-only delivery fee estimate (server is the authority):
- * - Rs 0 when subtotal <= 0
- * - Rs 30 when 0 < subtotal < 300
- * - Rs 0 when subtotal >= 300
- */
-export function estimateDeliveryFee(subtotal: Decimalish | null | undefined): Decimal {
-  const s = dec(subtotal)
-  if (s.lte(0) || s.gte(FREE_DELIVERY_THRESHOLD)) return dec(0)
-  return dec(DELIVERY_FEE)
+export interface StoreRules {
+  minOrder: number
+  deliveryFee: number
+  freeDeliveryAbove: number
+  cutoffTime: string
+  storeOpen: boolean
+  pincodes?: string[]
+}
+
+export const DEFAULT_STORE_RULES: StoreRules = {
+  minOrder: MIN_ORDER_AMOUNT,
+  deliveryFee: DELIVERY_FEE,
+  freeDeliveryAbove: FREE_DELIVERY_THRESHOLD,
+  cutoffTime: '18:00',
+  storeOpen: true,
+  pincodes: [],
+}
+
+function parseCutoffMinutes(cutoffTime?: string): number {
+  if (!cutoffTime) return DELIVERY_CUTOFF_HOUR * 60
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(cutoffTime.trim())
+  if (!match) return DELIVERY_CUTOFF_HOUR * 60
+  return Number(match[1]) * 60 + Number(match[2])
 }
 
 /**
- * Display-only minimum order check (server is the authority):
- * Orders under Rs 150 are rejected.
+ * Display-only delivery fee estimate (server is the authority):
+ * - Rs 0 when subtotal <= 0
+ * - rules.deliveryFee when 0 < subtotal < rules.freeDeliveryAbove
+ * - Rs 0 when subtotal >= rules.freeDeliveryAbove
  */
-export function isMinimumOrderMet(subtotal: Decimalish | null | undefined): boolean {
-  return dec(subtotal).gte(MIN_ORDER_AMOUNT)
+export function estimateDeliveryFee(
+  subtotal: Decimalish | null | undefined,
+  rules: Pick<StoreRules, 'deliveryFee' | 'freeDeliveryAbove'> = DEFAULT_STORE_RULES,
+): Decimal {
+  const s = dec(subtotal)
+  if (s.lte(0) || s.gte(rules.freeDeliveryAbove)) return dec(0)
+  return dec(rules.deliveryFee)
+}
+
+/**
+ * Display-only minimum order check (server is the authority).
+ */
+export function isMinimumOrderMet(
+  subtotal: Decimalish | null | undefined,
+  rules: Pick<StoreRules, 'minOrder'> = DEFAULT_STORE_RULES,
+): boolean {
+  return dec(subtotal).gte(rules.minOrder)
 }
 
 /**
  * Display-only cutoff check in IST (server is the authority):
- * Before 18:00 (6 PM) IST = delivery today (true); at or after 18:00 IST = tomorrow (false).
+ * Before cutoffTime (default 18:00 IST) = delivery today (true); at or after = tomorrow (false).
  */
-export function isSameDayDeliveryIST(now: Date = new Date()): boolean {
-  return currentHourIST(now) < DELIVERY_CUTOFF_HOUR
+export function isSameDayDeliveryIST(
+  now: Date = new Date(),
+  cutoffTime: string = DEFAULT_STORE_RULES.cutoffTime,
+): boolean {
+  return currentMinutesIST(now) < parseCutoffMinutes(cutoffTime)
 }

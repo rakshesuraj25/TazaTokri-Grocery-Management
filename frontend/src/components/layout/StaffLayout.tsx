@@ -19,6 +19,14 @@ import {
   Store,
   ChevronRight,
   Monitor,
+  KeyRound,
+  Settings,
+  Calculator,
+  BarChart3,
+  Bell,
+  Megaphone,
+  TrendingUp,
+  DatabaseBackup,
 } from 'lucide-react'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { Logo, LogoMark } from '@/components/Logo'
@@ -29,6 +37,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/features/auth/store'
 import { useLogout } from '@/features/auth/hooks'
+import { ChangePasswordDialog } from '@/features/auth/components/ChangePasswordDialog'
 import { cn } from '@/lib/utils'
 
 interface StaffNavItem {
@@ -64,6 +73,7 @@ export function StaffLayout() {
   const logout = useLogout()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed)
+  const [passwordOpen, setPasswordOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -129,6 +139,15 @@ export function StaffLayout() {
             icon: <Warehouse className="size-5 shrink-0" aria-hidden />,
             label: t('nav.stock'),
           },
+          ...(isOwner
+            ? [
+                {
+                  to: '/staff/inventory-insights',
+                  icon: <TrendingUp className="size-5 shrink-0" aria-hidden />,
+                  label: 'Demand Insights',
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -144,6 +163,7 @@ export function StaffLayout() {
             to: '/staff/suppliers',
             icon: <Truck className="size-5 shrink-0" aria-hidden />,
             label: t('nav.suppliers'),
+            roles: ['OWNER'],
           },
         ],
       },
@@ -155,6 +175,11 @@ export function StaffLayout() {
             to: '/staff/orders',
             icon: <Package className="size-5 shrink-0" aria-hidden />,
             label: t('nav.ordersStaff'),
+          },
+          {
+            to: '/staff/riders',
+            icon: <Truck className="size-5 shrink-0" aria-hidden />,
+            label: 'Riders & COD',
           },
         ],
       },
@@ -169,6 +194,16 @@ export function StaffLayout() {
                   icon: <CreditCard className="size-5 shrink-0" aria-hidden />,
                   label: t('nav.payments'),
                 },
+                {
+                  to: '/staff/cash-closing',
+                  icon: <Calculator className="size-5 shrink-0" aria-hidden />,
+                  label: 'Cash Closing',
+                },
+                {
+                  to: '/staff/reports',
+                  icon: <BarChart3 className="size-5 shrink-0" aria-hidden />,
+                  label: 'Business Reports',
+                },
               ],
             },
             {
@@ -179,6 +214,26 @@ export function StaffLayout() {
                   to: '/staff/users',
                   icon: <Users className="size-5 shrink-0" aria-hidden />,
                   label: t('nav.users'),
+                },
+                {
+                  to: '/staff/settings',
+                  icon: <Settings className="size-5 shrink-0" aria-hidden />,
+                  label: 'Store Settings',
+                },
+                {
+                  to: '/staff/notifications',
+                  icon: <Bell className="size-5 shrink-0" aria-hidden />,
+                  label: 'Notifications',
+                },
+                {
+                  to: '/staff/retention',
+                  icon: <Megaphone className="size-5 shrink-0" aria-hidden />,
+                  label: 'Retention & Promos',
+                },
+                {
+                  to: '/staff/backups',
+                  icon: <DatabaseBackup className="size-5 shrink-0" aria-hidden />,
+                  label: 'Backups',
                 },
               ],
             },
@@ -323,32 +378,61 @@ export function StaffLayout() {
           ) : null}
 
           {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={logout}
-                  aria-label={t('common.logout')}
-                  className="text-muted-foreground hover:text-tomato w-full rounded-xl"
-                >
-                  <LogOut className="size-4" aria-hidden />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">{t('common.logout')}</TooltipContent>
-            </Tooltip>
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setPasswordOpen(true)}
+                    aria-label="Change password"
+                    className="text-muted-foreground hover:text-primary w-full rounded-xl"
+                  >
+                    <KeyRound className="size-4" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Change password</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={logout}
+                    aria-label={t('common.logout')}
+                    className="text-muted-foreground hover:text-tomato w-full rounded-xl"
+                  >
+                    <LogOut className="size-4" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{t('common.logout')}</TooltipContent>
+              </Tooltip>
+            </>
           ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className="text-muted-foreground hover:text-tomato w-full justify-start rounded-xl px-2.5"
-            >
-              <LogOut className="size-4" aria-hidden />
-              {t('common.logout')}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPasswordOpen(true)}
+                className="text-muted-foreground hover:text-primary w-full justify-start rounded-xl px-2.5"
+              >
+                <KeyRound className="size-4" aria-hidden />
+                Change password
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={logout}
+                className="text-muted-foreground hover:text-tomato w-full justify-start rounded-xl px-2.5"
+              >
+                <LogOut className="size-4" aria-hidden />
+                {t('common.logout')}
+              </Button>
+            </>
           )}
         </div>
       </aside>
@@ -478,29 +562,46 @@ export function StaffLayout() {
             </div>
           </nav>
 
-          <div className="border-border bg-surface-subtle/60 flex items-center justify-between gap-2 border-t px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                {initials}
+          <div className="border-border bg-surface-subtle/60 space-y-2 border-t px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                  {initials}
+                </div>
+                <span className="text-foreground truncate text-xs font-semibold">{displayIdentity}</span>
               </div>
-              <span className="text-foreground truncate text-xs font-semibold">{displayIdentity}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDrawerOpen(false)
+                  logout()
+                }}
+                className="text-tomato shrink-0 rounded-full"
+              >
+                <LogOut className="size-4" aria-hidden />
+                {t('common.logout')}
+              </Button>
             </div>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => {
                 setDrawerOpen(false)
-                logout()
+                setPasswordOpen(true)
               }}
-              className="text-tomato shrink-0 rounded-full"
+              className="text-muted-foreground hover:text-primary w-full justify-start rounded-xl px-2"
             >
-              <LogOut className="size-4" aria-hidden />
-              {t('common.logout')}
+              <KeyRound className="size-4" aria-hidden />
+              Change password
             </Button>
           </div>
         </SheetContent>
       </Sheet>
+
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </div>
   )
 }

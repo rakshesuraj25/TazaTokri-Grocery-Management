@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { getCategoryTheme } from '@/lib/categoryTheme'
 
-export type CatalogStatusFilter = 'all' | 'available' | 'out' | 'noprice'
+export type CatalogStatusFilter = 'all' | 'available' | 'hidden_stocked' | 'out' | 'noprice'
 
 interface CatalogToolbarProps {
   search: string
@@ -30,6 +30,7 @@ export function CatalogToolbar({
   const statusChips: Array<{ key: CatalogStatusFilter; label: string }> = [
     { key: 'all', label: t('common.all') },
     { key: 'available', label: t('staff.catalog.availableToggle') },
+    { key: 'hidden_stocked', label: 'Stocked, hidden' },
     { key: 'out', label: t('common.outOfStock') },
     { key: 'noprice', label: t('staff.catalog.filterNoPrice', { defaultValue: 'No price' }) },
   ]

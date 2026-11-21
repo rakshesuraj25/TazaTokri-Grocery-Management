@@ -9,7 +9,11 @@ import { useCartStore } from '@/features/cart/store'
 import { useCustomerAddresses } from '@/features/users/hooks'
 import { AddAddressDialog } from '@/features/users/components/AddAddressDialog'
 import { estimateDeliveryFee, isMinimumOrderMet } from '@/lib/businessRules'
-import { addMoney, mulMoney, sumMoney } from '@/lib/money'
+import { usePublicStoreSettings } from '@/features/settings/hooks'
+import { useMyLoyalty } from '@/features/loyalty/api'
+import { retentionApi, type PromoPreview } from '@/features/retention/api'
+import { useAuthStore } from '@/features/auth/store'
+import { addMoney, dec, mulMoney, sumMoney } from '@/lib/money'
 import { toApiError } from '@/lib/api'
 import { usePlaceOrder } from '../hooks'
 import type { OrderPaymentMethod } from '../types'
@@ -31,6 +35,9 @@ export default function CheckoutPage() {
   const clearCart = useCartStore((s) => s.clearCart)
 
   const addresses = useCustomerAddresses()
+  const { settings } = usePublicStoreSettings()
+  const user = useAuthStore((s) => s.user)
+  const loyaltyQuery = useMyLoyalty(Boolean(user))
   const placeOrder = usePlaceOrder()
 
   const [step, setStep] = useState<CheckoutStep>(1)
@@ -38,6 +45,11 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>('COD')
   const [onlineDisabled, setOnlineDisabled] = useState(false)
   const [addAddrOpen, setAddAddrOpen] = useState(false)
+  const [redeemPointsInput, setRedeemPointsInput] = useState<string>('')
+  const [promoInput, setPromoInput] = useState<string>('')
+  const [appliedPromo, setAppliedPromo] = useState<PromoPreview | null>(null)
+  const [promoError, setPromoError] = useState<string | null>(null)
+  const [promoLoading, setPromoLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const submittingRef = useRef(false)
 
@@ -51,8 +63,79 @@ export default function CheckoutPage() {
   const itemsSubtotal = sumMoney(items.map((i) => mulMoney(i.pricePerUnit, i.count)))
   const combosSubtotal = sumMoney(combos.map((c) => mulMoney(c.sellingPrice, c.count)))
   const subtotal = addMoney(itemsSubtotal, combosSubtotal)
-  const deliveryFee = estimateDeliveryFee(subtotal)
-  const estimatedTotal = addMoney(subtotal, deliveryFee)
+  const deliveryFee = estimateDeliveryFee(subtotal, settings)
+
+  const loyalty = loyaltyQuery.data
+  const parsedRedeem = redeemPointsInput.trim() === '' ? 0 : Math.floor(Number(redeemPointsInput))
+  const redeemPoints =
+    loyalty?.enabled && Number.isFinite(parsedRedeem) && parsedRedeem > 0 ? parsedRedeem : 0
+  const maxAllowedRedeem = loyalty?.enabled
+    ? Math.min(
+        loyalty.balance,
+        loyalty.maxRedeemPointsPerOrder,
+        Math.floor(subtotal.div(loyalty.rupeesPerPoint || 1).toNumber()),
+      )
+    : 0
+  const redeemError =
+    redeemPoints > 0 && loyalty?.enabled
+      ? redeemPoints < loyalty.minRedeemPoints
+        ? `Minimum ${loyalty.minRedeemPoints} points required to redeem.`
+        : redeemPoints > loyalty.balance
+          ? `Insufficient points balance (${loyalty.balance} pts available).`
+          : redeemPoints > loyalty.maxRedeemPointsPerOrder
+            ? `Maximum ${loyalty.maxRedeemPointsPerOrder} points allowed per order.`
+            : redeemPoints > maxAllowedRedeem
+              ? 'Redemption discount cannot exceed items subtotal.'
+              : null
+      : null
+  const loyaltyDiscount =
+    loyalty?.enabled && redeemPoints > 0 && !redeemError
+      ? dec(redeemPoints).mul(loyalty.rupeesPerPoint)
+      : dec(0)
+  const promoDiscount = appliedPromo ? dec(appliedPromo.discountAmount) : dec(0)
+  const estimatedTotal = addMoney(
+    subtotal.sub(loyaltyDiscount).sub(promoDiscount).lt(0)
+      ? dec(0)
+      : subtotal.sub(loyaltyDiscount).sub(promoDiscount),
+    deliveryFee,
+  )
+  const estimatedPointsEarned = loyalty?.enabled
+    ? Math.floor(
+        Math.max(0, subtotal.sub(loyaltyDiscount).sub(promoDiscount).toNumber()) *
+          (loyalty.pointsPer100Inr / 100),
+      )
+    : 0
+
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase()
+    if (!code) return
+    setPromoLoading(true)
+    setPromoError(null)
+    try {
+      const preview = await retentionApi.validatePromo(
+        code,
+        subtotal.toNumber(),
+        loyaltyDiscount.toNumber(),
+      )
+      setAppliedPromo(preview)
+    } catch (err) {
+      setAppliedPromo(null)
+      setPromoError(toApiError(err).message)
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null)
+    setPromoInput('')
+    setPromoError(null)
+  }
+  const selectedAddress = (addresses.data ?? []).find((a) => String(a.id) === selectedAddressId)
+  const selectedPinServiceable =
+    !selectedAddress ||
+    settings.pincodes.length === 0 ||
+    settings.pincodes.includes(selectedAddress.pincode.trim())
 
   if (items.length === 0 && combos.length === 0) {
     return (
@@ -91,6 +174,8 @@ export default function CheckoutPage() {
               })),
             }
           : {}),
+        ...(redeemPoints > 0 && !redeemError ? { redeemPoints } : {}),
+        ...(appliedPromo ? { promoCode: appliedPromo.code } : {}),
       },
       {
         onSuccess: (order) => {
@@ -134,6 +219,30 @@ export default function CheckoutPage() {
 
       <CheckoutStepBar step={step} onSelectStep={setStep} />
 
+      {!settings.storeOpen && (
+        <div
+          role="alert"
+          className="bg-turmeric-light text-turmeric-foreground rounded-2xl border border-amber-300/70 p-3.5 text-sm font-medium"
+        >
+          {t('shop.storePausedBanner', {
+            defaultValue:
+              'Store is currently paused for new online orders. Existing orders are not affected.',
+          })}
+        </div>
+      )}
+
+      {selectedAddress && !selectedPinServiceable && (
+        <div
+          role="alert"
+          className="bg-tomato-light text-tomato rounded-2xl border border-red-200/70 p-3.5 text-sm font-medium"
+        >
+          {t('checkout.unserviceablePin', {
+            pincode: selectedAddress.pincode,
+            defaultValue: `We do not deliver to PIN code ${selectedAddress.pincode} right now. Please choose or add another address.`,
+          })}
+        </div>
+      )}
+
       {serverError && (
         <div
           role="alert"
@@ -150,6 +259,7 @@ export default function CheckoutPage() {
             activeStep={step === 1}
             addresses={addresses.data ?? []}
             selectedAddressId={selectedAddressId}
+            serviceablePincodes={settings.pincodes}
             onSelectAddress={(id) => {
               setSelectedAddressId(id)
               setStep(2)
@@ -175,7 +285,28 @@ export default function CheckoutPage() {
           subtotal={subtotal}
           deliveryFee={deliveryFee}
           estimatedTotal={estimatedTotal}
-          canPlace={Boolean(selectedAddressId) && isMinimumOrderMet(subtotal)}
+          rules={settings}
+          loyalty={loyalty}
+          redeemPointsInput={redeemPointsInput}
+          onRedeemPointsChange={setRedeemPointsInput}
+          maxRedeemPoints={maxAllowedRedeem}
+          redeemError={redeemError}
+          loyaltyDiscount={loyaltyDiscount}
+          estimatedPointsEarned={estimatedPointsEarned}
+          promoInput={promoInput}
+          onPromoInputChange={setPromoInput}
+          appliedPromo={appliedPromo}
+          promoError={promoError}
+          promoLoading={promoLoading}
+          onApplyPromo={() => void handleApplyPromo()}
+          onRemovePromo={handleRemovePromo}
+          canPlace={
+            Boolean(selectedAddressId) &&
+            settings.storeOpen &&
+            selectedPinServiceable &&
+            !redeemError &&
+            isMinimumOrderMet(subtotal, settings)
+          }
           isPending={placeOrder.isPending}
           onPlaceOrder={handlePlaceOrder}
         />
