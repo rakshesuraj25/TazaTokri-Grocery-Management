@@ -50,6 +50,7 @@ CERTBOT_ARGS=(
   --non-interactive
   --agree-tos
   --keep-until-expiring
+  --cert-name "$DOMAIN"
   -m "$CERTBOT_EMAIL"
   -d "$DOMAIN"
 )

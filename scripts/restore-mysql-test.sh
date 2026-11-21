@@ -76,7 +76,7 @@ run_mysql() {
     docker compose -f "$COMPOSE_FILE" exec -T -e MYSQL_PWD="$DB_PASSWORD" "$MYSQL_SERVICE" \
       mysql -h 127.0.0.1 -P 3306 -u "$DB_USER" "$@"
   else
-    run_mysql "$@"
+    mysql --defaults-extra-file="$CNF_FILE" "$@"
   fi
 }
 

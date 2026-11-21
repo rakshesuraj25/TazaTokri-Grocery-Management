@@ -27,7 +27,6 @@ cd "$PROJECT_DIR"
 ENV_FILE="${PROJECT_DIR}/.env"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.yml"
 BACKUP_SCRIPT="${PROJECT_DIR}/scripts/backup-mysql.sh"
-BACKUP_STATUS_FILE="${BACKUP_STATUS_FILE:-${PROJECT_DIR}/backend/data/backup-status/backup-status.json}"
 INITIAL_BOOTSTRAP="${INITIAL_BOOTSTRAP:-false}"
 FRESH_BOOTSTRAP="false"
 
@@ -41,6 +40,8 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+BACKUP_STATUS_FILE="${BACKUP_STATUS_FILE:-${PROJECT_DIR}/backend/data/backup-status/backup-status.json}"
 
 # 3. Validate APP_VERSION (never allow empty or 'latest')
 CURRENT_STEP="version_validation"
@@ -69,23 +70,46 @@ docker compose version >/dev/null 2>&1 || { log "ERROR" "Docker Compose plugin i
   exit 1
 }
 
+UPLOADS_MOUNT_DIR="${PROJECT_DIR}/backend/data/private-uploads"
+BACKUP_STATUS_MOUNT_DIR="${PROJECT_DIR}/backend/data/backup-status"
+if [[ ! -d "$UPLOADS_MOUNT_DIR" ]]; then
+  log "ERROR" "Required bind-mount directory missing: ${UPLOADS_MOUNT_DIR}. Create it first with UID 1001 ownership (e.g., mkdir -p '${UPLOADS_MOUNT_DIR}' && sudo chown -R 1001:1001 '${UPLOADS_MOUNT_DIR}' && chmod 750 '${UPLOADS_MOUNT_DIR}')."
+  exit 1
+fi
+if [[ ! -d "$BACKUP_STATUS_MOUNT_DIR" ]]; then
+  log "ERROR" "Required bind-mount directory missing: ${BACKUP_STATUS_MOUNT_DIR}. Create it first (e.g., mkdir -p '${BACKUP_STATUS_MOUNT_DIR}' && chmod 755 '${BACKUP_STATUS_MOUNT_DIR}')."
+  exit 1
+fi
+if command -v stat >/dev/null 2>&1; then
+  UPLOADS_UID="$(stat -c '%u' "$UPLOADS_MOUNT_DIR" 2>/dev/null || true)"
+  if [[ -n "$UPLOADS_UID" && "$UPLOADS_UID" != "1001" ]]; then
+    log "WARN" "${UPLOADS_MOUNT_DIR} is owned by UID ${UPLOADS_UID} (expected UID 1001 for backend container). Verify permissions manually if uploads fail: sudo chown -R 1001:1001 '${UPLOADS_MOUNT_DIR}' && chmod 750 '${UPLOADS_MOUNT_DIR}'"
+  fi
+fi
+
 docker compose -f "$COMPOSE_FILE" config -q
-log "INFO" "Preflight passed (Docker, Compose config, .env, TLS certs, and backup script verified)."
+log "INFO" "Preflight passed (Docker, Compose config, .env, TLS certs, bind-mount dirs, and backup script verified)."
 
 # 5. Conservative Fresh-Bootstrap Detection & Mandatory Backup Gate
 CURRENT_STEP="mandatory_backup"
 BACKUP_GATE_RESULT="FAILED"
-EXISTING_MYSQL_CID="$(docker compose -f "$COMPOSE_FILE" ps -aq mysql 2>/dev/null || true)"
-EXISTING_MYSQL_VOLS="$(docker volume ls -q --filter "name=mysql_data" 2>/dev/null || true)"
+COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')}"
+EXPECTED_MYSQL_VOLUME="${COMPOSE_PROJECT}_mysql_data"
+
+EXISTING_MYSQL_CID="$(docker compose -f "$COMPOSE_FILE" ps -aq mysql)"
+ALL_VOLUMES="$(docker volume ls -q)"
+EXISTING_MYSQL_VOLS="$(printf '%s\n' "$ALL_VOLUMES" | grep -E "^(${EXPECTED_MYSQL_VOLUME}|tazatokri_mysql_data|taza_tokri_mysql_data|mysql_data)$" || true)"
+ALL_CONTAINERS="$(docker ps -a --format '{{.Names}}')"
+EXISTING_TAZATOKRI_MYSQL_CONTAINERS="$(printf '%s\n' "$ALL_CONTAINERS" | grep -E '^tazatokri.*mysql' || true)"
 
 if [[ "$INITIAL_BOOTSTRAP" == "true" ]]; then
-  if [[ -n "$EXISTING_MYSQL_CID" || -n "$EXISTING_MYSQL_VOLS" ]]; then
-    log "ERROR" "Existing MySQL container or mysql_data volume detected; refusing INITIAL_BOOTSTRAP=true bypass."
+  if [[ -n "$EXISTING_MYSQL_CID" || -n "$EXISTING_MYSQL_VOLS" || -n "$EXISTING_TAZATOKRI_MYSQL_CONTAINERS" ]]; then
+    log "ERROR" "Existing MySQL container or volume detected (compose_cid='${EXISTING_MYSQL_CID}', vols='${EXISTING_MYSQL_VOLS}', host_mysql='${EXISTING_TAZATOKRI_MYSQL_CONTAINERS}'); refusing INITIAL_BOOTSTRAP=true bypass."
     exit 1
   fi
   FRESH_BOOTSTRAP="true"
   BACKUP_GATE_RESULT="DEFERRED_TO_POST_BOOTSTRAP"
-  log "INFO" "Confirmed fresh bootstrap (no existing MySQL container or mysql_data volume). Baseline encrypted backup will run immediately after startup."
+  log "INFO" "Confirmed fresh bootstrap (no existing MySQL container or TazaTokri MySQL volume). Baseline encrypted backup will run immediately after startup."
 else
   RUNNING_MYSQL_CID="$(docker compose -f "$COMPOSE_FILE" ps -q mysql 2>/dev/null || true)"
   if [[ -z "$RUNNING_MYSQL_CID" ]]; then

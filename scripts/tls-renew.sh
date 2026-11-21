@@ -28,7 +28,7 @@ command -v docker >/dev/null 2>&1 || { log "ERROR" "docker is not installed."; e
 [[ -d "$WEBROOT_DIR" ]] || { log "ERROR" "Missing ACME webroot directory: ${WEBROOT_DIR}"; exit 1; }
 
 log "INFO" "Running certbot webroot renewal for '${DOMAIN}'..."
-if ! certbot renew --webroot -w "$WEBROOT_DIR" --non-interactive; then
+if ! certbot renew --webroot -w "$WEBROOT_DIR" --cert-name "$DOMAIN" --non-interactive; then
   log "ERROR" "Certbot renewal failed. Existing certificates in ${CERTS_DIR}/ were preserved."
   exit 1
 fi

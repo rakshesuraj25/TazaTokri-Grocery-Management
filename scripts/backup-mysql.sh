@@ -54,6 +54,7 @@ FINAL_TMP="$TMP_GZ"
 ENCRYPTED="false"
 COMPRESSED="false"
 VERIFICATION_STATUS="FAILED"
+FAILURE_STATUS_WRITTEN="false"
 
 log_msg() {
   local level="$1"
@@ -89,13 +90,14 @@ write_failed_status() {
 EOF
   mv -f "${STATUS_JSON}.tmp" "$STATUS_JSON"
   chmod 644 "$STATUS_JSON"
+  FAILURE_STATUS_WRITTEN="true"
 }
 
 cleanup() {
   local exit_code=$?
   rm -rf "$TMP_DIR"
   rm -f "$LOCK_FILE"
-  if [[ $exit_code -ne 0 && "$VERIFICATION_STATUS" != "VERIFIED" ]]; then
+  if [[ $exit_code -ne 0 && "$VERIFICATION_STATUS" != "VERIFIED" && "$FAILURE_STATUS_WRITTEN" != "true" ]]; then
     write_failed_status "Backup aborted with exit code ${exit_code}"
   fi
 }
