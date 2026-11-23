@@ -142,6 +142,15 @@ export default function LoginPage() {
                 <Button type="submit" size="lg" className="w-full rounded-full" loading={login.isPending}>
                   {login.isPending ? t('auth.loggingIn') : t('auth.login')}
                 </Button>
+
+                <div className="text-right">
+                  <Link
+                    to="/forgot-password"
+                    className="text-primary text-xs font-semibold underline-offset-4 hover:underline"
+                  >
+                    {t('auth.forgotPassword', { defaultValue: 'Forgot password?' })}
+                  </Link>
+                </div>
               </form>
 
               <p className="text-muted-foreground mt-5 text-center text-sm">

@@ -165,7 +165,8 @@ class InventoryInsightsTests {
         assertEquals(2, dash.atRiskCount());
         assertEquals(1, dash.criticalRiskCount());
         assertEquals(1, dash.highRiskCount());
-        assertEquals(2, dash.lowDemandCount());
+        assertEquals(1, dash.lowDemandCount());
+        assertEquals(2, dash.noSalesHistoryCount());
         assertEquals(new BigDecimal("1360.00"), dash.estimatedInventoryValue());
 
         // Unit consistency: KG, BUNCH, PIECE kept separate
@@ -182,6 +183,9 @@ class InventoryInsightsTests {
         assertEquals(new BigDecimal("4.000"), tomato.avgDailyLast7d());
         assertEquals(StockoutRisk.CRITICAL, tomato.stockoutRisk());
         assertEquals(SalesTrend.INCREASING, tomato.salesTrend());
+        assertEquals(InventoryInsightsService.DemandCategory.INCREASING_DEMAND, tomato.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.BUY_TODAY, tomato.purchaseAction());
+        assertTrue(tomato.lowStock());
         assertEquals(new BigDecimal("0.0"), tomato.daysRemaining());
         assertEquals(new BigDecimal("14.000"), tomato.forecastDemand());
         assertEquals(new BigDecimal("14.000"), tomato.suggestedPurchaseQty());
@@ -189,6 +193,9 @@ class InventoryInsightsTests {
         var onion = dash.products().stream().filter(p -> p.vegetableId() == 2L).findFirst().orElseThrow();
         assertEquals(StockoutRisk.HIGH, onion.stockoutRisk());
         assertEquals(SalesTrend.STABLE, onion.salesTrend());
+        assertEquals(InventoryInsightsService.DemandCategory.SELLING_WELL, onion.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.PURCHASE_SOON, onion.purchaseAction());
+        assertTrue(onion.lowStock());
         assertEquals(new BigDecimal("4.0"), onion.daysRemaining());
         // 7d demand = 21.000, stock = 12.000 -> suggested = 9.000
         assertEquals(new BigDecimal("9.000"), onion.suggestedPurchaseQty());
@@ -196,17 +203,25 @@ class InventoryInsightsTests {
         var potato = dash.products().stream().filter(p -> p.vegetableId() == 3L).findFirst().orElseThrow();
         assertEquals(StockoutRisk.LOW, potato.stockoutRisk());
         assertEquals(SalesTrend.DECREASING, potato.salesTrend());
+        assertEquals(InventoryInsightsService.DemandCategory.DECREASING_DEMAND, potato.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.REDUCE_PURCHASE, potato.purchaseAction());
+        assertTrue(potato.wastageRisk());
         assertEquals(new BigDecimal("0.000"), potato.suggestedPurchaseQty());
 
         var coriander = dash.products().stream().filter(p -> p.vegetableId() == 4L).findFirst().orElseThrow();
         assertEquals(StockoutRisk.NO_DATA, coriander.stockoutRisk());
         assertEquals(SalesTrend.NO_DATA, coriander.salesTrend());
+        assertEquals(InventoryInsightsService.DemandCategory.INSUFFICIENT_DATA, coriander.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.NO_DATA, coriander.purchaseAction());
         assertNull(coriander.daysRemaining());
         assertEquals(BigDecimal.ZERO.setScale(3), coriander.suggestedPurchaseQty());
 
         var coconut = dash.products().stream().filter(p -> p.vegetableId() == 5L).findFirst().orElseThrow();
         assertEquals(StockoutRisk.NO_DATA, coconut.stockoutRisk());
+        assertEquals(InventoryInsightsService.DemandCategory.NO_SALES_HISTORY, coconut.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.NO_DATA, coconut.purchaseAction());
         assertEquals(BigDecimal.ZERO.setScale(3), coconut.suggestedPurchaseQty());
+        assertTrue(dash.slowMoving().isEmpty());
 
         // Planning horizon 14 days
         InventoryInsightsService.InventoryInsightsDashboard dash14 = service.getDashboard(14);
@@ -230,5 +245,52 @@ class InventoryInsightsTests {
 
         PreAuthorize auth = InventoryInsightsController.class.getAnnotation(PreAuthorize.class);
         assertTrue(auth != null && "hasRole('OWNER')".equals(auth.value()));
+    }
+
+    @Test
+    void separatesNewAndZeroSalesProductsFromGenuineSlowMovingAndWastageRisk() {
+        Vegetable newItem = veg(10L, "Broccoli", UnitType.PIECE);
+        newItem.setCreatedAt(LocalDateTime.of(2026, 11, 19, 9, 0));
+
+        Vegetable slowItem = veg(11L, "Ginger", UnitType.BUNCH);
+        slowItem.setCreatedAt(LocalDateTime.of(2026, 9, 1, 9, 0));
+
+        VegetableRepository vegRepo = proxy(VegetableRepository.class, (p, m, a) -> List.of(newItem, slowItem));
+        StockMovementRepository movRepo = proxy(StockMovementRepository.class, (p, m, a) -> List.of(
+                stockRow(10L, "Broccoli", "15.000"),
+                stockRow(11L, "Ginger", "200.000")
+        ));
+
+        LocalDateTime expectedFrom7d = LocalDateTime.of(2026, 11, 15, 0, 0);
+        CustomerOrderRepository orderRepo = proxy(CustomerOrderRepository.class, (p, m, a) -> {
+            LocalDateTime from = (LocalDateTime) a[0];
+            if (from.equals(expectedFrom7d)) {
+                return List.of(orderDemand(11L, 1, "70.000"));
+            }
+            return List.of(orderDemand(11L, 3, "300.000"));
+        });
+        SaleItemRepository saleRepo = proxy(SaleItemRepository.class, (p, m, a) -> List.of());
+        PurchaseItemRepository purRepo = proxy(PurchaseItemRepository.class, (p, m, a) -> List.of());
+
+        InventoryInsightsService service = new InventoryInsightsService(
+                vegRepo, movRepo, orderRepo, saleRepo, purRepo, FIXED_CLOCK);
+
+        InventoryInsightsService.InventoryInsightsDashboard dash = service.getDashboard(7);
+        assertEquals(1, dash.noSalesHistoryCount());
+        assertEquals(1, dash.lowDemandCount());
+        assertEquals(1, dash.slowMoving().size());
+        assertEquals("Ginger", dash.slowMoving().get(0).name());
+        assertEquals(1, dash.wastageRiskProducts().size());
+        assertEquals("Ginger", dash.wastageRiskProducts().get(0).name());
+
+        var broccoli = dash.products().stream().filter(p -> p.vegetableId() == 10L).findFirst().orElseThrow();
+        assertEquals(InventoryInsightsService.DemandCategory.NO_SALES_HISTORY, broccoli.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.NO_DATA, broccoli.purchaseAction());
+        assertTrue(broccoli.recommendationReason().toLowerCase().contains("newly added"));
+
+        var ginger = dash.products().stream().filter(p -> p.vegetableId() == 11L).findFirst().orElseThrow();
+        assertEquals(InventoryInsightsService.DemandCategory.SLOW_MOVING, ginger.demandCategory());
+        assertEquals(InventoryInsightsService.PurchaseAction.REDUCE_PURCHASE, ginger.purchaseAction());
+        assertTrue(ginger.wastageRisk());
     }
 }

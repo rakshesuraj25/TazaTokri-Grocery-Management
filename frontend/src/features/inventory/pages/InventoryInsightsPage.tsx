@@ -31,8 +31,10 @@ import { toApiError } from '@/lib/api'
 import { formatMoney, formatQty } from '@/lib/money'
 import {
   useInventoryInsights,
+  type DemandCategory,
   type PlanningHorizon,
   type ProductDemandInsight,
+  type PurchaseAction,
   type SalesTrend,
   type StockoutRisk,
 } from '../insightsApi'
@@ -55,6 +57,43 @@ function riskBadgeVariant(risk: StockoutRisk): 'destructive' | 'secondary' | 'ou
   return 'outline'
 }
 
+function riskLabel(risk: StockoutRisk): string {
+  if (risk === 'CRITICAL') return 'Critical'
+  if (risk === 'HIGH') return 'Low Stock'
+  if (risk === 'LOW') return 'Healthy'
+  return 'No Sales Data'
+}
+
+function purchaseActionBadge(action?: PurchaseAction) {
+  if (action === 'BUY_TODAY') {
+    return <Badge variant="destructive">Buy today</Badge>
+  }
+  if (action === 'PURCHASE_SOON') {
+    return <Badge variant="default">Purchase soon</Badge>
+  }
+  if (action === 'REDUCE_PURCHASE') {
+    return (
+      <Badge variant="outline" className="border-amber-500 text-amber-700">
+        Reduce purchase
+      </Badge>
+    )
+  }
+  if (action === 'STOCK_SUFFICIENT') {
+    return <Badge variant="secondary">Stock sufficient</Badge>
+  }
+  return <Badge variant="outline">Not enough sales data</Badge>
+}
+
+function demandCategoryLabel(category?: DemandCategory): string | null {
+  if (!category) return null
+  if (category === 'SELLING_WELL') return 'Selling well'
+  if (category === 'INCREASING_DEMAND') return 'Increasing demand'
+  if (category === 'DECREASING_DEMAND') return 'Decreasing demand'
+  if (category === 'SLOW_MOVING') return 'Slow-moving'
+  if (category === 'NO_SALES_HISTORY') return 'No sales history'
+  return 'Insufficient sales data'
+}
+
 function TrendBadge({ trend }: { trend: SalesTrend }) {
   if (trend === 'INCREASING') {
     return (
@@ -73,11 +112,11 @@ function TrendBadge({ trend }: { trend: SalesTrend }) {
   if (trend === 'STABLE') {
     return (
       <Badge variant="secondary" className="gap-1">
-        <Minus className="size-3" /> Stable
+        <Minus className="size-3" /> Steady
       </Badge>
     )
   }
-  return <Badge variant="outline">No Data</Badge>
+  return <Badge variant="outline">No Sales Data</Badge>
 }
 
 export default function InventoryInsightsPage() {
@@ -192,10 +231,18 @@ export default function InventoryInsightsPage() {
             <Stat
               label="At Risk of Stockout"
               value={data.atRiskCount}
-              hint={`${data.criticalRiskCount} critical · ${data.highRiskCount} high`}
+              hint={`${data.criticalRiskCount} critical · ${data.highRiskCount} low stock`}
               tone={data.criticalRiskCount > 0 ? 'danger' : undefined}
             />
-            <Stat label="Low-Demand Products" value={data.lowDemandCount} />
+            <Stat
+              label="Slow-Moving / Falling"
+              value={data.lowDemandCount}
+              hint={
+                data.noSalesHistoryCount !== undefined
+                  ? `${data.noSalesHistoryCount} without enough sales data`
+                  : undefined
+              }
+            />
             <Stat label="Available Inventory" value={unitSummaryText} />
             <Stat
               label="Est. Inventory Value"
@@ -280,16 +327,36 @@ export default function InventoryInsightsPage() {
               </Card>
 
               <Card className="rounded-3xl border p-4 sm:col-span-2">
-                <h3 className="mb-2 text-sm font-bold">Slow-Moving Products</h3>
-                {data.slowMoving.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">None</p>
+                <h3 className="mb-2 text-sm font-bold">Slow-Moving & Wastage Risk</h3>
+                {data.slowMoving.length === 0 && (!data.wastageRiskProducts || data.wastageRiskProducts.length === 0) ? (
+                  <p className="text-muted-foreground text-xs">
+                    No slow-moving or overstocked items flagged right now.
+                  </p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {data.slowMoving.map((p) => (
-                      <Badge key={p.vegetableId} variant="outline" className="text-xs">
-                        {p.name}: {formatQty(p.totalQtySold30d)} {p.unit} (30d)
-                      </Badge>
-                    ))}
+                  <div className="space-y-2">
+                    {data.slowMoving.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {data.slowMoving.map((p) => (
+                          <Badge key={p.vegetableId} variant="outline" className="text-xs">
+                            {p.name}: {formatQty(p.totalQtySold30d)} {p.unit} sold (30d)
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {data.wastageRiskProducts && data.wastageRiskProducts.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-amber-700">Overstocked (reduce buying):</span>
+                        {data.wastageRiskProducts.map((p) => (
+                          <Badge
+                            key={`waste-${p.vegetableId}`}
+                            variant="outline"
+                            className="border-amber-500 text-xs text-amber-700"
+                          >
+                            {p.name} ({p.daysRemaining !== null ? `${p.daysRemaining}d stock` : 'Overstocked'})
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>
@@ -313,11 +380,11 @@ export default function InventoryInsightsPage() {
               onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
               className="border-input bg-background h-10 rounded-full border px-3 text-xs font-medium"
             >
-              <option value="ALL">All Risk Levels</option>
+              <option value="ALL">All Stock Levels</option>
               <option value="CRITICAL">Critical (1–2d)</option>
-              <option value="HIGH">High (3–5d)</option>
-              <option value="LOW">Low Risk</option>
-              <option value="NO_DATA">No Data</option>
+              <option value="HIGH">Low Stock (3–5d)</option>
+              <option value="LOW">Healthy Stock</option>
+              <option value="NO_DATA">No Sales Data</option>
             </select>
             <select
               aria-label="Filter by sales trend"
@@ -327,9 +394,9 @@ export default function InventoryInsightsPage() {
             >
               <option value="ALL">All Trends</option>
               <option value="INCREASING">Increasing</option>
-              <option value="STABLE">Stable</option>
+              <option value="STABLE">Steady</option>
               <option value="DECREASING">Decreasing</option>
-              <option value="NO_DATA">No Data</option>
+              <option value="NO_DATA">No Sales Data</option>
             </select>
             <select
               aria-label="Sort products"
@@ -364,12 +431,19 @@ export default function InventoryInsightsPage() {
                             {p.stockoutRisk === 'CRITICAL' && (
                               <AlertTriangle className="mr-1 size-3" />
                             )}
-                            {p.stockoutRisk.replace('_', ' ')}
+                            {riskLabel(p.stockoutRisk)}
                           </Badge>
+                          {p.purchaseAction && purchaseActionBadge(p.purchaseAction)}
                           <TrendBadge trend={p.salesTrend} />
+                          {p.demandCategory === 'SLOW_MOVING' && (
+                            <Badge variant="outline" className="text-xs">
+                              {demandCategoryLabel(p.demandCategory)}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-muted-foreground text-xs">
-                          Stock: <strong>{formatQty(p.currentStock)} {p.unit}</strong> · Sold (30d):{' '}
+                          Stock: <strong>{formatQty(p.currentStock)} {p.unit}</strong> · Sold (7d):{' '}
+                          <strong>{formatQty(p.totalQtySold7d)} {p.unit}</strong> · Sold (30d):{' '}
                           <strong>{formatQty(p.totalQtySold30d)} {p.unit}</strong> ({p.orderCount30d}{' '}
                           orders) · Avg/day: <strong>{formatQty(p.avgDailyDemand)} {p.unit}</strong> ·
                           Days left:{' '}

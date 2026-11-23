@@ -77,6 +77,22 @@ export function useVerifyOnlinePayment() {
   })
 }
 
+export function useFailOnlinePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      body,
+    }: {
+      orderId: number | string
+      body: { razorpayOrderId: string; razorpayPaymentId?: string; reason?: string }
+    }) => ordersApi.failOnlinePayment(orderId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ordersKeys.all })
+    },
+  })
+}
+
 export function useStaffOrders(params: { date?: string; status?: OrderStatus } = {}) {
   return useQuery({
     queryKey: ordersKeys.staffList(params.date, params.status),

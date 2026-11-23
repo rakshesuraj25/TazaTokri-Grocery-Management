@@ -33,8 +33,10 @@ export function DeliveryOrderCard({
   onFail,
 }: DeliveryOrderCardProps) {
   const { t } = useTranslation()
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    `${order.address} ${order.pincode}`,
+  const cleanPhone = (order.customerPhone ?? '').replace(/[^\d+]/g, '')
+  const destination = [order.address, order.pincode].filter(Boolean).join(', ')
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    destination,
   )}`
   const hasDue = dec(order.amountToCollect).gt(0)
 
@@ -130,12 +132,19 @@ export function DeliveryOrderCard({
       </ul>
 
       <div className="grid grid-cols-2 gap-2">
-        <Button asChild variant="outline" size="lg" className="rounded-2xl">
-          <a href={`tel:${order.customerPhone}`}>
+        {cleanPhone ? (
+          <Button asChild variant="outline" size="lg" className="rounded-2xl">
+            <a href={`tel:${cleanPhone}`}>
+              <Phone className="size-4" />
+              {t('delivery.callCustomer')}
+            </a>
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="lg" className="rounded-2xl" disabled>
             <Phone className="size-4" />
-            {t('delivery.callCustomer')}
-          </a>
-        </Button>
+            {t('delivery.noPhone', { defaultValue: 'No phone' })}
+          </Button>
+        )}
         <Button asChild variant="outline" size="lg" className="rounded-2xl">
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
             <MapPin className="size-4" />
@@ -169,7 +178,7 @@ export function DeliveryOrderCard({
             className="rounded-2xl"
           >
             <XCircle className="size-5" />
-            {t('delivery.fail')}
+            {t('delivery.unableToDeliver', { defaultValue: 'Unable to Deliver' })}
           </Button>
         </div>
       )}

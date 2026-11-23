@@ -60,6 +60,15 @@ public class DeliveryAdminController {
 		return service.assign(id, req.deliveryUserId(), auth.getName());
 	}
 
+	@PostMapping("/orders/{id}/unassign")
+	@PreAuthorize("hasAnyRole('OWNER','STAFF')")
+	public AttemptResponse unassign(
+			@PathVariable Long id,
+			@Valid @RequestBody(required = false) ReturnToStoreRequest req,
+			Authentication auth) {
+		return service.unassign(id, req != null ? req.note() : null, auth.getName());
+	}
+
 	@PostMapping("/orders/{id}/return-to-store")
 	@PreAuthorize("hasAnyRole('OWNER','STAFF')")
 	public AttemptResponse returnToStore(

@@ -33,9 +33,24 @@ public class RazorpayWebhookController {
         String event = json.optString("event");
 
         if (event.equals("payment.captured") || event.equals("order.paid")) {
-            JSONObject pay = json.getJSONObject("payload").getJSONObject("payment").getJSONObject("entity");
-            service.handleCaptured(pay.getString("order_id"), pay.getString("id"), pay.getLong("amount"));
+            JSONObject pay = extractPaymentEntity(json);
+            if (pay != null) {
+                service.handleCaptured(pay.optString("order_id"), pay.optString("id"), pay.optLong("amount"));
+            }
+        } else if (event.equals("payment.failed")) {
+            JSONObject pay = extractPaymentEntity(json);
+            if (pay != null) {
+                service.handleFailed(pay.optString("order_id"), pay.optString("id"), pay.optString("error_description"));
+            }
         }
         return ResponseEntity.ok().build();     // unknown events: acknowledge so Razorpay stops retrying
+    }
+
+    private static JSONObject extractPaymentEntity(JSONObject root) {
+        JSONObject payload = root.optJSONObject("payload");
+        if (payload == null) return null;
+        JSONObject payment = payload.optJSONObject("payment");
+        if (payment == null) return null;
+        return payment.optJSONObject("entity");
     }
 }

@@ -88,12 +88,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if ("POST".equalsIgnoreCase(method) && "/api/auth/signup".equals(uri)) {
             return new Rule("auth_signup", 5, 300, false);
         }
+        if ("POST".equalsIgnoreCase(method) && "/api/auth/forgot-password".equals(uri)) {
+            return new Rule("auth_forgot_password", 5, 300, false);
+        }
+        if ("POST".equalsIgnoreCase(method) && "/api/auth/reset-password".equals(uri)) {
+            return new Rule("auth_reset_password", 10, 300, false);
+        }
+        if ("POST".equalsIgnoreCase(method) && uri.startsWith("/api/account/")) {
+            return new Rule("account_security", 10, 300, true);
+        }
         if ("POST".equalsIgnoreCase(method) && uri.startsWith("/api/ai/")) {
             return new Rule("ai_assist", 10, 60, true);
         }
         if ("POST".equalsIgnoreCase(method)
                 && uri.startsWith("/api/customer/orders/")
-                && (uri.endsWith("/payment") || uri.endsWith("/payment/verify"))) {
+                && (uri.endsWith("/payment") || uri.endsWith("/payment/verify") || uri.endsWith("/payment/fail"))) {
             return new Rule("payment_init", 15, 60, true);
         }
         if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/public/")) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -52,8 +52,48 @@ export function CustomerOrderReceiptDialog({
     setSettings(next)
   }
 
+  useEffect(() => {
+    const styleId = 'receipt-page-size-style'
+    const existing = document.getElementById(styleId)
+    if (!order) {
+      existing?.remove()
+      document.body.classList.remove('printing-receipt')
+      return
+    }
+    const pageRule =
+      settings.preferredWidth === '58mm'
+        ? '@page { size: 58mm auto; margin: 2mm; }'
+        : settings.preferredWidth === '80mm'
+          ? '@page { size: 80mm auto; margin: 3mm; }'
+          : '@page { size: A4 portrait; margin: 12mm; }'
+
+    const styleEl =
+      (existing as HTMLStyleElement | null) ?? document.createElement('style')
+    styleEl.id = styleId
+    styleEl.textContent = pageRule
+    if (!existing) {
+      document.head.appendChild(styleEl)
+    }
+
+    const cleanupAfterPrint = () => {
+      document.body.classList.remove('printing-receipt')
+    }
+    window.addEventListener('afterprint', cleanupAfterPrint)
+    return () => {
+      window.removeEventListener('afterprint', cleanupAfterPrint)
+      document.body.classList.remove('printing-receipt')
+      document.getElementById(styleId)?.remove()
+    }
+  }, [order, settings.preferredWidth])
+
   const handlePrint = () => {
-    window.print()
+    document.body.classList.add('printing-receipt')
+    try {
+      window.print()
+    } finally {
+      // Fallback for browsers where window.print() is synchronous or afterprint doesn't fire
+      setTimeout(() => document.body.classList.remove('printing-receipt'), 500)
+    }
   }
 
   const widthClass =

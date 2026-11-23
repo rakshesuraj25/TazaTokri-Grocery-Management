@@ -53,6 +53,9 @@ public class OnlinePaymentService {
         }
 
         long paise = RazorpayGateway.toPaise(o.getEstimatedTotal());
+        if (paise < 100) {
+            throw new BadRequestException("Online payment requires an order total of at least ₹1.00");
+        }
 
         // customer tapped "Pay" again: reuse the open Razorpay order
         Optional<Payment> open = payments.findFirstByOrderIdAndMethodAndKindAndStatus(
@@ -89,24 +92,75 @@ public class OnlinePaymentService {
         return new VerifyResult(o.getId(), o.getStatus());
     }
 
+    /** Records a client-reported Razorpay payment failure so the customer can retry with a fresh order. */
+    @Transactional
+    public VerifyResult markFailed(Long orderId, String rzpOrderId, String rzpPaymentId,
+                                   String reason, String customerPhone) {
+        CustomerOrder o = lockOwned(orderId, customerPhone);
+        Optional<Payment> found = payments.findFirstByMethodAndKindAndReference(
+                        PaymentMethod.RAZORPAY, PaymentKind.COLLECTION, rzpOrderId)
+                .filter(x -> x.getOrderId().equals(orderId));
+        if (found.isPresent()) {
+            applyFailed(o, found.get(), rzpPaymentId, reason);
+        }
+        return new VerifyResult(o.getId(), o.getStatus());
+    }
+
     /** Called by the webhook. Unknown or mismatching payments are logged and ignored. */
     @Transactional
     public void handleCaptured(String rzpOrderId, String rzpPaymentId, long amountPaise) {
-        Optional<Payment> found = payments.findFirstByMethodAndKindAndReference(
+        Optional<Payment> initial = payments.findFirstByMethodAndKindAndReference(
                 PaymentMethod.RAZORPAY, PaymentKind.COLLECTION, rzpOrderId);
-        if (found.isEmpty()) {
+        if (initial.isEmpty()) {
             log.warn("Webhook for unknown Razorpay order {}", rzpOrderId);
             return;
         }
-        Payment p = found.get();
-        CustomerOrder o = orders.findByIdForUpdate(p.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + p.getOrderId()));
+        CustomerOrder o = orders.findByIdForUpdate(initial.get().getOrderId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + initial.get().getOrderId()));
+        Payment p = payments.findFirstByMethodAndKindAndReference(
+                        PaymentMethod.RAZORPAY, PaymentKind.COLLECTION, rzpOrderId)
+                .orElse(initial.get());
         if (RazorpayGateway.toPaise(p.getAmount()) != amountPaise) {
             log.error("Amount mismatch for order {}: expected {} got {}", o.getId(),
                     RazorpayGateway.toPaise(p.getAmount()), amountPaise);
             return;
         }
         applyPaid(o, p, rzpPaymentId);
+    }
+
+    /** Called by the webhook on payment.failed. Never overwrites an already-successful payment. */
+    @Transactional
+    public void handleFailed(String rzpOrderId, String rzpPaymentId, String reason) {
+        if (rzpOrderId == null || rzpOrderId.isBlank()) {
+            return;
+        }
+        Optional<Payment> initial = payments.findFirstByMethodAndKindAndReference(
+                PaymentMethod.RAZORPAY, PaymentKind.COLLECTION, rzpOrderId);
+        if (initial.isEmpty()) {
+            log.warn("Failure webhook for unknown Razorpay order {}", rzpOrderId);
+            return;
+        }
+        CustomerOrder o = orders.findByIdForUpdate(initial.get().getOrderId())
+                .orElse(null);
+        if (o == null) {
+            return;
+        }
+        Payment p = payments.findFirstByMethodAndKindAndReference(
+                        PaymentMethod.RAZORPAY, PaymentKind.COLLECTION, rzpOrderId)
+                .orElse(initial.get());
+        applyFailed(o, p, rzpPaymentId, reason);
+    }
+
+    private void applyFailed(CustomerOrder o, Payment p, String rzpPaymentId, String reason) {
+        if (p.getStatus() == PaymentStatus.SUCCESS || p.getStatus() == PaymentStatus.FAILED) {
+            return;
+        }
+        p.setStatus(PaymentStatus.FAILED);
+        if (rzpPaymentId != null && !rzpPaymentId.isBlank() && p.getProviderPaymentId() == null) {
+            p.setProviderPaymentId(rzpPaymentId);
+        }
+        log.info("Marked Razorpay payment {} for order {} as FAILED ({})",
+                p.getReference(), o.getId(), reason != null ? reason : "gateway failure");
     }
 
     // idempotent: the second caller (verify or webhook) finds SUCCESS and returns

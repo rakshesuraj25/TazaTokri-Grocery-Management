@@ -59,6 +59,8 @@ export interface DeliverCollectionInput {
   method?: 'CASH' | 'UPI_QR'
   amountCollected?: string
   reference?: string
+  recipientName?: string
+  deliveryNote?: string
 }
 
 export interface OtpIssueResponse {

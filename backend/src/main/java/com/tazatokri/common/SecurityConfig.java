@@ -67,6 +67,10 @@ public class SecurityConfig {
 
                 .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
 
+                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
+
                 .requestMatchers(HttpMethod.POST, "/api/auth/register").hasRole("OWNER")
 
                 .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()

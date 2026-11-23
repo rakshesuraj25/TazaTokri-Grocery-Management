@@ -97,6 +97,10 @@ vi.mock('@/features/delivery/hooks', () => ({
       opts?.onSuccess?.()
     },
   }),
+  useUnassignDelivery: () => ({
+    isPending: false,
+    mutate: vi.fn(),
+  }),
   useIssueDeliveryOtp: () => ({
     isPending: false,
     mutate: (
@@ -256,9 +260,9 @@ describe('Phase 4 — Delivery Dispatch, OTP, Proof of Delivery, Health & Sentry
 
     const otpSection = screen.getByTestId('delivery-otp-section')
     expect(otpSection).toBeTruthy()
-    expect(screen.getByTestId('delivery-pod-section')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /Send \/ Issue 6-Digit OTP/i }))
+    fireEvent.click(screen.getByText(/Customer OTP \(Optional\)/i))
+    fireEvent.click(screen.getByRole('button', { name: /Send 6-Digit OTP/i }))
     expect(mockIssueOtp).toHaveBeenCalledWith(901)
 
     const otpInput = screen.getByPlaceholderText('6-digit OTP')

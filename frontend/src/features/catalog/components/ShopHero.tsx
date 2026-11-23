@@ -1,26 +1,16 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowRight, Clock, ShieldCheck, Sprout, Truck } from 'lucide-react'
+import { ArrowRight, Clock, Scale, Sprout, Truck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { VegetableImage } from '@/components/VegetableImage'
-import { WeaveDivider } from '@/components/WeaveDivider'
-import { useVegetableName } from '@/hooks/useVegetableName'
 import { useAuthStore } from '@/features/auth/store'
 import { postLoginPath } from '@/features/auth/roles'
 import type { PublicVegetable } from '@/features/catalog/types'
-import {
-  isSameDayDeliveryIST,
-} from '@/lib/businessRules'
+import { isSameDayDeliveryIST } from '@/lib/businessRules'
 import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { fmtDate, todayIST } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
-
-const FALLBACK_SHOWCASE = [
-  { nameEn: 'Tomato', category: 'Everyday Vegetables' },
-  { nameEn: 'Spinach (Palak)', category: 'Leafy Greens' },
-  { nameEn: 'Onion (Kanda)', category: 'Roots & Tubers' },
-  { nameEn: 'Okra (Bhendi)', category: 'Everyday Vegetables' },
-]
 
 interface ShopHeroProps {
   featuredVegetables?: PublicVegetable[]
@@ -28,31 +18,33 @@ interface ShopHeroProps {
 
 export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
   const { t } = useTranslation()
-  const { name } = useVegetableName()
   const user = useAuthStore((s) => s.user)
   const { settings } = usePublicStoreSettings()
   const isSameDay = isSameDayDeliveryIST(new Date(), settings.cutoffTime)
   const pickedDate = fmtDate(todayIST())
-
-  const liveHighlights = featuredVegetables.filter((v) => v.inStock).slice(0, 4)
+  const [heroImgFailed, setHeroImgFailed] = useState(false)
+  void featuredVegetables
 
   return (
-    <section className="space-y-4 py-1 sm:py-2">
-      <div className="bg-primary text-primary-foreground relative overflow-hidden rounded-3xl px-5 py-6 shadow-md sm:px-8 sm:py-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-20 -right-16 size-72 rounded-full bg-white/5"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-24 left-1/3 size-64 rounded-full bg-black/10"
-        />
-
-        <div className="relative grid items-center gap-6 lg:grid-cols-[1.2fr_0.95fr]">
-          <div className="space-y-4">
+    <section className="space-y-4">
+      <div className="bg-card border-border relative overflow-hidden rounded-[22px] border shadow-[0_3px_12px_rgba(34,44,35,0.04)]">
+        {/* Subtle restrained botanical corner accent */}
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 120 120"
+          className="text-primary pointer-events-none absolute -bottom-4 -left-4 size-32 opacity-[0.05]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <path d="M12 108C22 72 48 44 92 28C76 62 52 92 12 108Z" />
+          <path d="M12 108C40 80 64 56 92 28" />
+        </svg>
+        <div className="grid items-center gap-6 p-4 min-[390px]:p-5 md:grid-cols-[0.95fr_1.05fr] md:gap-8 md:p-8 lg:min-h-[460px] lg:grid-cols-[0.88fr_1.12fr] lg:gap-10 lg:p-12">
+          <div className="min-w-0 space-y-4 sm:space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold tracking-wide text-white uppercase backdrop-blur-xs">
-                <Sprout className="text-turmeric size-3.5 shrink-0" aria-hidden />
+              <span className="bg-secondary text-primary inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase">
+                <Sprout className="text-deep-green size-3.5 shrink-0" aria-hidden />
                 <span>
                   {t('shop.pickedFresh', {
                     date: pickedDate,
@@ -61,26 +53,28 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
                 </span>
               </span>
 
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/20 px-3 py-1 text-xs font-medium text-white/95">
-                <Clock className="text-turmeric size-3.5 shrink-0" aria-hidden />
+              <span className="bg-surface-subtle text-muted-foreground inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium">
+                <Clock className="text-tomato size-3.5 shrink-0" aria-hidden />
                 <span>{isSameDay ? t('shop.cutoffBefore') : t('shop.cutoffAfter')}</span>
               </span>
             </div>
 
-            <div className="space-y-2">
-              <h1 className="font-organic text-3xl leading-[1.12] font-bold tracking-tight text-white sm:text-4xl lg:text-[2.65rem]">
-                {t('shop.editorialHeroTitle', { defaultValue: 'Freshness for every home' })}
+            <div className="space-y-2.5 sm:space-y-3">
+              <h1 className="font-organic text-foreground text-[34px] leading-[1.08] font-normal tracking-[-0.015em] min-[390px]:text-[38px] sm:text-[44px] lg:text-[54px]">
+                {t('shop.editorialHeroTitle', { defaultValue: 'Freshness for every home.' })}
               </h1>
-              <p className="max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
-                {t('shop.hero.subtitle')}
+              <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed sm:text-[17px]">
+                {t('shop.hero.subtitle', {
+                  defaultValue: 'Good vegetables. Honest prices. Delivered to your home.',
+                })}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <div className="flex flex-wrap items-center gap-4 pt-1">
               <Button
                 asChild
                 size="lg"
-                className="bg-turmeric text-turmeric-foreground hover:bg-turmeric/90 rounded-full font-extrabold shadow-sm"
+                className="bg-primary text-primary-foreground hover:bg-[#245C42] h-12 rounded-[11px] px-7 text-[15px] font-semibold shadow-xs transition-colors duration-200"
               >
                 <a href="#shop-catalog">
                   {t('shop.shopNowCta', { defaultValue: 'Shop fresh vegetables' })}
@@ -88,110 +82,90 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
                 </a>
               </Button>
 
-              {!user ? (
-                <Button
-                  asChild
-                  variant="outline"
-                  size="lg"
-                  className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                >
-                  <Link to="/login">{t('auth.login')}</Link>
-                </Button>
-              ) : (
+              {user &&
                 user.roles.some((r) => r === 'OWNER' || r === 'STAFF' || r === 'DELIVERY') && (
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="lg"
-                    className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                  <Link
+                    to={postLoginPath(user.roles)}
+                    className="text-primary inline-flex items-center gap-1 text-sm font-semibold underline-offset-4 hover:underline"
                   >
-                    <Link to={postLoginPath(user.roles)}>
-                      {t('landing.continueAs')}
-                      <ArrowRight className="size-4" aria-hidden />
-                    </Link>
-                  </Button>
-                )
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/15 pt-3 text-xs font-medium text-white/90 sm:text-sm">
-              <span className="inline-flex items-center gap-1.5">
-                <Truck className="text-turmeric size-4 shrink-0" aria-hidden />
-                {t('shop.minOrderRule', {
-                  amount: formatMoney(settings.minOrder),
-                  defaultValue: `Min. order ${formatMoney(settings.minOrder)}`,
-                })}
-              </span>
-              <span aria-hidden className="text-white/40">
-                •
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <ShieldCheck className="text-turmeric size-4 shrink-0" aria-hidden />
-                {t('shop.deliveryRule', {
-                  fee: formatMoney(settings.deliveryFee),
-                  threshold: formatMoney(settings.freeDeliveryAbove),
-                  defaultValue: `Delivery ${formatMoney(settings.deliveryFee)} · Free above ${formatMoney(settings.freeDeliveryAbove)}`,
-                })}
-              </span>
+                    {t('landing.continueAs')}
+                    <ArrowRight className="size-3.5" aria-hidden />
+                  </Link>
+                )}
             </div>
           </div>
 
-          {/* Right visual showcase grid from live catalog */}
-          <div className="rounded-2xl bg-black/15 p-3.5 backdrop-blur-xs">
-            <div className="mb-2.5 flex items-center justify-between text-xs font-semibold text-white/90">
-              <span>{t('shop.freshArrivals', { defaultValue: "Today's fresh arrivals" })}</span>
-              <Link to="/display/prices" className="text-turmeric hover:underline">
-                {t('shop.viewTodaysRates', { defaultValue: "Today's rate board" })}
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {liveHighlights.length > 0
-                ? liveHighlights.map((veg) => (
-                    <a
-                      key={String(veg.id)}
-                      href="#shop-catalog"
-                      className="bg-card/95 text-foreground group flex items-center gap-2.5 rounded-xl p-2 shadow-xs transition-transform duration-150 hover:-translate-y-0.5"
-                    >
-                      <VegetableImage
-                        nameEn={veg.nameEn}
-                        nameMr={veg.nameMr}
-                        nameHi={veg.nameHi}
-                        imageUrl={veg.imageUrl}
-                        category={veg.category}
-                        alt={name(veg)}
-                        size="xs"
-                        priority
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold">{name(veg)}</p>
-                        {veg.pricePerUnit && (
-                          <p className="text-primary money-num truncate text-[11px] font-extrabold">
-                            {formatMoney(veg.pricePerUnit)}/{t(`units.${veg.baseUnit}`, { defaultValue: veg.baseUnit })}
-                          </p>
-                        )}
-                      </div>
-                    </a>
-                  ))
-                : FALLBACK_SHOWCASE.map((item) => (
-                    <div
-                      key={item.nameEn}
-                      className="bg-card/95 text-foreground flex items-center gap-2.5 rounded-xl p-2 shadow-xs"
-                    >
-                      <VegetableImage
-                        nameEn={item.nameEn}
-                        category={item.category}
-                        size="sm"
-                        priority
-                      />
-                      <span className="truncate text-xs font-bold">{item.nameEn}</span>
-                    </div>
-                  ))}
-            </div>
+          {/* Large unobstructed editorial produce photography */}
+          <div className="bg-surface-subtle border-border relative aspect-[4/3] w-full overflow-hidden rounded-[18px] border md:h-[320px] md:aspect-auto lg:h-[380px]">
+            {!heroImgFailed ? (
+              <img
+                src="/hero-produce.jpg"
+                alt={t('shop.editorialHeroTitle', { defaultValue: 'Freshness for every home.' })}
+                loading="eager"
+                decoding="async"
+                onError={() => setHeroImgFailed(true)}
+                className="h-full w-full object-cover object-center"
+              />
+            ) : (
+              <div className="grid h-full w-full grid-cols-2 gap-3 p-3">
+                <VegetableImage nameEn="Tomato" size="card" className="rounded-xl" priority />
+                <VegetableImage nameEn="Capsicum" size="card" className="rounded-xl" priority />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <WeaveDivider />
+      {/* Compact freshness & delivery benefit strip */}
+      <div className="bg-card border-border grid gap-3 rounded-[16px] border px-4 py-3.5 shadow-[0_3px_12px_rgba(34,44,35,0.04)] sm:grid-cols-3 sm:gap-6 sm:px-6">
+        <div className="flex items-center gap-3">
+          <div className="bg-secondary text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Sprout className="size-4" aria-hidden />
+          </div>
+          <p className="text-foreground text-[13px] font-medium">
+            {t('shop.trustPickedTitle', { defaultValue: 'Picked fresh' })} ·{' '}
+            <span className="text-brand-muted font-normal">
+              {t('shop.trustPickedBody', {
+                defaultValue: 'Hand-sorted every morning for your kitchen.',
+              })}
+            </span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="bg-secondary text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Scale className="size-4" aria-hidden />
+          </div>
+          <p className="text-foreground text-[13px] font-medium">
+            {t('shop.trustWeightTitle', { defaultValue: 'Pay for actual weight' })} ·{' '}
+            <span className="text-brand-muted font-normal">
+              {t('shop.trustWeightBody', {
+                defaultValue: 'Final bill is based on the exact weight packed.',
+              })}
+            </span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="bg-secondary text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Truck className="size-4" aria-hidden />
+          </div>
+          <p className="text-foreground text-[13px] font-medium">
+            {t('shop.minOrderRule', {
+              amount: formatMoney(settings.minOrder),
+              defaultValue: `Min. order ${formatMoney(settings.minOrder)}`,
+            })}{' '}
+            ·{' '}
+            <span className="text-brand-muted font-normal">
+              {t('shop.deliveryRule', {
+                fee: formatMoney(settings.deliveryFee),
+                threshold: formatMoney(settings.freeDeliveryAbove),
+                defaultValue: `Delivery ${formatMoney(settings.deliveryFee)} · Free above ${formatMoney(settings.freeDeliveryAbove)}`,
+              })}
+            </span>
+          </p>
+        </div>
+      </div>
     </section>
   )
 }

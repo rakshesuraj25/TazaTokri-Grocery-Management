@@ -39,9 +39,7 @@ export default function DeliveryOrdersPage() {
   const list = orders.data ?? []
   const assignedCount = list.filter((o) => o.deliveryStatus === 'ASSIGNED').length
   const outCount = list.filter((o) => o.deliveryStatus === 'OUT_FOR_DELIVERY').length
-  const doneCount = list.filter(
-    (o) => o.deliveryStatus === 'DELIVERED' || o.deliveryStatus === 'FAILED',
-  ).length
+  const doneCount = list.filter((o) => o.deliveryStatus === 'DELIVERED').length
   const cashToCollect = sumMoney(
     list
       .filter(

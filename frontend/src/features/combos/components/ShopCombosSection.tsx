@@ -64,12 +64,12 @@ export function ShopCombosSection({
             <Card
               key={String(combo.id)}
               data-testid={`combo-card-${combo.id}`}
-              className="border-primary/25 bg-card flex h-full flex-col justify-between gap-3 rounded-2xl p-4 shadow-2xs transition-shadow hover:shadow-md"
+              className="border-border bg-card flex h-full flex-col justify-between gap-3 rounded-[16px] border p-4 shadow-[0_3px_12px_rgba(34,44,35,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(34,44,35,0.08)]"
             >
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="secondary" className="gap-1 rounded-full">
+                    <Badge variant="secondary" className="gap-1 rounded-md">
                       <Package className="size-3.5" aria-hidden />
                       {t('combos.itemsCount', {
                         count: combo.items.length,
@@ -77,7 +77,7 @@ export function ShopCombosSection({
                       })}
                     </Badge>
                     {isRecommended && (
-                      <Badge variant="default" className="gap-1 rounded-full">
+                      <Badge variant="default" className="gap-1 rounded-md">
                         <Sparkles className="size-3" aria-hidden />
                         {t('combos.recommendedBadge', {
                           defaultValue: 'Matches your usual',
@@ -87,7 +87,7 @@ export function ShopCombosSection({
                   </div>
 
                   {hasSavings && (
-                    <Badge variant="warning" className="rounded-full font-bold">
+                    <Badge variant="warning" className="rounded-md font-bold">
                       {t('combos.saveBadge', {
                         amount: formatMoney(combo.savingsAmount),
                         defaultValue: `Save ${formatMoney(combo.savingsAmount)}`,

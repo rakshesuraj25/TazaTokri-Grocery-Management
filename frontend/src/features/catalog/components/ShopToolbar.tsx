@@ -32,11 +32,11 @@ export function ShopToolbar({
   const { t } = useTranslation()
 
   return (
-    <div className="bg-background/95 sticky top-15 z-30 -mx-4 space-y-3 border-b border-transparent px-4 py-2.5 backdrop-blur-md">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="bg-background/95 border-border sticky top-[64px] z-30 -mx-4 space-y-3 border-b px-4 py-3 backdrop-blur-md sm:top-[70px] sm:-mx-8 sm:px-8">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
+            className="text-brand-muted pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
             aria-hidden
           />
           <Input
@@ -46,7 +46,7 @@ export function ShopToolbar({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t('shop.search')}
             aria-label={t('shop.search')}
-            className="bg-card h-11 rounded-full pr-11 pl-10 text-base sm:text-sm"
+            className="bg-card border-input h-11 rounded-[11px] pr-11 pl-10 text-base shadow-[0_3px_12px_rgba(34,44,35,0.04)] sm:text-sm"
           />
           {search.trim().length > 0 && (
             <button
@@ -64,7 +64,7 @@ export function ShopToolbar({
           aria-label={t('common.sort')}
           value={sortBy}
           onChange={(e) => onSortChange(e.target.value as ShopSortOption)}
-          className="border-input bg-card text-foreground h-11 rounded-full border px-4 text-sm font-medium"
+          className="border-input bg-card text-foreground h-11 rounded-[11px] border px-4 text-sm font-medium shadow-[0_3px_12px_rgba(34,44,35,0.04)]"
         >
           <option value="name">{t('shop.sortName', { defaultValue: 'Name A-Z' })}</option>
           <option value="priceAsc">
@@ -85,10 +85,10 @@ export function ShopToolbar({
               key={cat}
               type="button"
               onClick={() => onCategoryChange(cat)}
-              className={`touch-target inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-bold transition-colors duration-150 ${
+              className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition-colors duration-150 ${
                 active
                   ? 'bg-primary text-primary-foreground border-primary'
-                  : `bg-card text-foreground ${theme.borderClass} hover:bg-secondary/50`
+                  : `bg-card text-foreground ${theme.borderClass} hover:bg-secondary/60`
               }`}
             >
               {cat !== 'ALL' && (
@@ -106,10 +106,10 @@ export function ShopToolbar({
           type="button"
           aria-pressed={inStockOnly}
           onClick={() => onInStockOnlyChange(!inStockOnly)}
-          className={`touch-target inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-bold transition-colors duration-150 ${
+          className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition-colors duration-150 ${
             inStockOnly
               ? 'bg-secondary border-primary text-primary'
-              : 'bg-card border-border text-foreground hover:bg-secondary/50'
+              : 'bg-card border-border text-foreground hover:bg-secondary/60'
           }`}
         >
           {inStockOnly && <Check className="size-3.5" aria-hidden />}

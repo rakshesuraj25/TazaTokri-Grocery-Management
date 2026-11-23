@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Truck,
   UserCheck,
+  UserX,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toApiError } from '@/lib/api'
 import { formatMoney } from '@/lib/money'
-import { useReturnDeliveryToStore, useStaffDeliveryBoard } from '../hooks'
+import { useReturnDeliveryToStore, useStaffDeliveryBoard, useUnassignDelivery } from '../hooks'
 
 interface StaffDeliveryBoardPanelProps {
   date?: string
@@ -50,8 +51,19 @@ export function StaffDeliveryBoardPanel({
       assigneeId && assigneeId !== 'UNASSIGNED' ? assigneeId : undefined,
   })
   const returnToStore = useReturnDeliveryToStore()
+  const unassignDelivery = useUnassignDelivery()
 
   const board = boardQuery.data
+
+  const handleUnassign = (orderId: number | string) => {
+    unassignDelivery.mutate(
+      { orderId, note: 'Unassigned by staff' },
+      {
+        onSuccess: () => toast.success('Delivery unassigned'),
+        onError: (err) => toast.error(toApiError(err).message),
+      },
+    )
+  }
 
   const handleReturnToStore = (orderId: number | string) => {
     returnToStore.mutate(
@@ -311,6 +323,22 @@ export function StaffDeliveryBoardPanel({
                           : t('staff.orders.assign')}
                       </Button>
                     )}
+
+                    {item.assignedDeliveryUserId &&
+                      (item.deliveryStage === 'ASSIGNED' ||
+                        item.deliveryStage === 'OUT_FOR_DELIVERY') && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 rounded-full px-2.5 text-xs"
+                          loading={unassignDelivery.isPending}
+                          onClick={() => handleUnassign(item.orderId)}
+                        >
+                          <UserX className="size-3.5" aria-hidden />
+                          Unassign
+                        </Button>
+                      )}
 
                     {canReturnToStore && (
                       <Button

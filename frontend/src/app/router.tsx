@@ -12,6 +12,7 @@ import { PageLoader } from '@/components/PageLoader'
 const LandingPage = lazy(() => import('@/features/landing/pages/LandingPage'))
 const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage'))
 const SignupPage = lazy(() => import('@/features/auth/pages/SignupPage'))
+const ForgotPasswordPage = lazy(() => import('@/features/auth/pages/ForgotPasswordPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const ForbiddenPage = lazy(() => import('@/pages/ForbiddenPage'))
 
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/login', element: wrap(<LoginPage />) },
       { path: '/signup', element: wrap(<SignupPage />) },
+      { path: '/forgot-password', element: wrap(<ForgotPasswordPage />) },
     ],
   },
 

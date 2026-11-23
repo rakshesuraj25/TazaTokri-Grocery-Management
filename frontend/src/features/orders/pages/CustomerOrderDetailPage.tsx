@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, BookmarkPlus, Printer, RotateCcw, XCircle } from 'lucide-react'
@@ -22,6 +22,7 @@ import { toApiError } from '@/lib/api'
 import {
   useCancelCustomerOrder,
   useCustomerOrder,
+  useFailOnlinePayment,
   useStartOnlinePayment,
   useVerifyOnlinePayment,
 } from '../hooks'
@@ -39,9 +40,23 @@ interface RazorpaySuccessPayload {
   razorpay_signature: string
 }
 
+interface RazorpayFailedPayload {
+  error?: {
+    description?: string
+    reason?: string
+    metadata?: {
+      order_id?: string
+      payment_id?: string
+    }
+  }
+}
+
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void }
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void
+      on?: (event: string, handler: (res: RazorpayFailedPayload) => void) => void
+    }
   }
 }
 
@@ -87,6 +102,8 @@ export default function CustomerOrderDetailPage() {
   const cancelOrder = useCancelCustomerOrder()
   const startPay = useStartOnlinePayment()
   const verifyPay = useVerifyOnlinePayment()
+  const failPay = useFailOnlinePayment()
+  const payingRef = useRef(false)
   const addItem = useCartStore((s) => s.addItem)
   const user = useAuthStore((s) => s.user)
 
@@ -111,9 +128,12 @@ export default function CustomerOrderDetailPage() {
   const order = orderQuery.data
 
   const handlePayNow = async () => {
+    if (payingRef.current || startPay.isPending || verifyPay.isPending) return
+    payingRef.current = true
     setPayError(null)
     const isLoaded = await loadRazorpayScript()
     if (!isLoaded && !window.Razorpay) {
+      payingRef.current = false
       setPayError(
         t('checkout.gatewaySdkLoadError', {
           defaultValue: 'Unable to load payment gateway SDK. Please check your internet connection.',
@@ -141,27 +161,75 @@ export default function CustomerOrderDetailPage() {
             },
             modal: {
               ondismiss: () => {
+                payingRef.current = false
                 setPolling(false)
               },
             },
             handler: (res: RazorpaySuccessPayload) => {
+              if (!res?.razorpay_order_id || !res?.razorpay_payment_id || !res?.razorpay_signature) {
+                payingRef.current = false
+                setPolling(false)
+                setPayError(
+                  t('checkout.invalidGatewayResponse', {
+                    defaultValue: 'Incomplete payment response received. Please try again.',
+                  }),
+                )
+                return
+              }
               setPolling(true)
-              verifyPay.mutate({
-                orderId: order.id,
-                body: {
-                  razorpayOrderId: res.razorpay_order_id,
-                  razorpayPaymentId: res.razorpay_payment_id,
-                  razorpaySignature: res.razorpay_signature,
+              verifyPay.mutate(
+                {
+                  orderId: order.id,
+                  body: {
+                    razorpayOrderId: res.razorpay_order_id,
+                    razorpayPaymentId: res.razorpay_payment_id,
+                    razorpaySignature: res.razorpay_signature,
+                  },
                 },
-              })
+                {
+                  onSuccess: () => {
+                    payingRef.current = false
+                    setPolling(false)
+                    setPayError(null)
+                    toast.success(
+                      t('checkout.paymentVerified', { defaultValue: 'Payment verified and order placed!' }),
+                    )
+                  },
+                  onError: (err) => {
+                    payingRef.current = false
+                    setPolling(false)
+                    setPayError(toApiError(err).message)
+                  },
+                },
+              )
             },
+          })
+          rzp.on?.('payment.failed', (res: RazorpayFailedPayload) => {
+            payingRef.current = false
+            setPolling(false)
+            const msg =
+              res?.error?.description ||
+              t('checkout.paymentFailed', {
+                defaultValue: 'Payment failed. You can try paying again.',
+              })
+            setPayError(msg)
+            failPay.mutate({
+              orderId: order.id,
+              body: {
+                razorpayOrderId: res?.error?.metadata?.order_id || init.razorpayOrderId,
+                razorpayPaymentId: res?.error?.metadata?.payment_id,
+                reason: res?.error?.reason || msg,
+              },
+            })
           })
           rzp.open()
         } else {
+          payingRef.current = false
           setPolling(true)
         }
       },
       onError: (err) => {
+        payingRef.current = false
         const apiErr = toApiError(err)
         setPayError(
           apiErr.status === 400 &&

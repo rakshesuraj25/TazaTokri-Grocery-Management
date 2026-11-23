@@ -26,7 +26,7 @@ export function ShopFeaturedCategories({
   return (
     <section aria-label={t('shop.featuredCategories', { defaultValue: 'Shop by category' })} className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-organic text-foreground text-lg font-bold sm:text-xl">
+        <h2 className="font-organic text-foreground text-[26px] font-normal sm:text-[32px]">
           {t('shop.featuredCategories', { defaultValue: 'Shop by category' })}
         </h2>
         {selectedCategory !== 'ALL' && (
@@ -40,7 +40,7 @@ export function ShopFeaturedCategories({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
         {concreteCategories.map((cat) => {
           const items = vegetables.filter((v) => v.category === cat)
           const lead = items.find((v) => v.inStock) ?? items[0]
@@ -53,14 +53,14 @@ export function ShopFeaturedCategories({
               type="button"
               onClick={() => {
                 onSelectCategory(active ? 'ALL' : cat)
-                document.getElementById('shop-catalog')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                document.getElementById('shop-catalog')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
               }}
               aria-pressed={active}
               className={cn(
-                'bg-card hover:border-primary/40 flex items-center gap-3 rounded-2xl border p-2.5 text-left shadow-2xs transition-all duration-150',
+                'bg-card hover:border-primary/40 group flex items-center gap-2.5 rounded-[15px] border p-2.5 text-left shadow-[0_3px_12px_rgba(34,44,35,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(34,44,35,0.08)] sm:gap-3 sm:p-3',
                 active
-                  ? 'border-primary bg-sage/45 ring-2 ring-primary/20'
-                  : 'border-border/80',
+                  ? 'border-primary bg-secondary/75 ring-1 ring-primary/25'
+                  : 'border-border',
               )}
             >
               {lead ? (
@@ -78,8 +78,8 @@ export function ShopFeaturedCategories({
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="font-display text-foreground truncate text-sm font-bold">{cat}</p>
-                <p className="text-muted-foreground money-num text-xs">
+                <p className="text-foreground truncate text-[15px] font-semibold">{cat}</p>
+                <p className="text-brand-muted money-num text-xs">
                   {t('shop.categoryCount', {
                     count: items.length,
                     defaultValue: `${items.length} items`,

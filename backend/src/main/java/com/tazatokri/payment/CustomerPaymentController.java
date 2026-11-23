@@ -9,11 +9,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 
 @RestController
 @RequestMapping("/api/customer/orders/{orderId}/payment")
 @PreAuthorize("hasRole('CUSTOMER')")
 public class CustomerPaymentController {
+
+    public record PaymentFailureRequest(
+            @NotBlank String razorpayOrderId,
+            String razorpayPaymentId,
+            String reason) {}
 
     private final OnlinePaymentService service;
     public CustomerPaymentController(OnlinePaymentService service) { this.service = service; }
@@ -28,5 +34,13 @@ public class CustomerPaymentController {
                                                     @Valid @RequestBody VerifyRequest req,
                                                     Authentication auth) {
         return service.verify(orderId, req, auth.getName());
+    }
+
+    @PostMapping("/fail")
+    public OnlinePaymentService.VerifyResult fail(@PathVariable Long orderId,
+                                                  @Valid @RequestBody PaymentFailureRequest req,
+                                                  Authentication auth) {
+        return service.markFailed(orderId, req.razorpayOrderId(), req.razorpayPaymentId(),
+                req.reason(), auth.getName());
     }
 }

@@ -39,6 +39,7 @@ import { fmtDate } from '@/lib/dates'
 import { useCustomerAddresses } from '../hooks'
 import { AddAddressDialog } from '../components/AddAddressDialog'
 import { ChangePasswordForm } from '@/features/auth/components/ChangePasswordForm'
+import { AccountSecuritySection } from '@/features/auth/components/AccountSecuritySection'
 
 export default function AccountPage() {
   const { t } = useTranslation()
@@ -302,11 +303,12 @@ export default function AccountPage() {
         </section>
       )}
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="font-display text-base font-bold">Account security</h2>
         <Card className="p-4 sm:p-5">
           <ChangePasswordForm />
         </Card>
+        <AccountSecuritySection />
       </section>
 
       <AddAddressDialog open={addOpen} onClose={() => setAddOpen(false)} />

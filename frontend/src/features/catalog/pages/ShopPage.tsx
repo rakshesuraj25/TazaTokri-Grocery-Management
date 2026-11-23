@@ -4,14 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Search, ShoppingBag, Sprout } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { EstimatedAmount } from '@/components/MoneyDisplay'
 import { SectionHeader } from '@/components/SectionHeader'
 import { ProductGridSkeleton } from '@/components/Skeletons'
 import { useCartStore } from '@/features/cart/store'
 import { pruneCartWithCatalog } from '@/features/cart/pruneCart'
-import { CartContents } from '@/features/cart/components/CartContents'
 import { CartDrawer } from '@/features/cart/components/CartDrawer'
 import { useAuthStore } from '@/features/auth/store'
 import { usePublicCombos } from '@/features/combos/hooks'
@@ -61,6 +59,12 @@ export default function ShopPage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [saveBasketOpen, setSaveBasketOpen] = useState(false)
   const [prunedNames, setPrunedNames] = useState<string[]>([])
+
+  useEffect(() => {
+    const onOpenCart = () => setCartOpen(true)
+    window.addEventListener('tazatokri:open-cart', onOpenCart)
+    return () => window.removeEventListener('tazatokri:open-cart', onOpenCart)
+  }, [])
 
   // Prune cart lines missing/out-of-stock/unpriced once live catalog loads, preserving clientRef
   useEffect(() => {
@@ -162,144 +166,133 @@ export default function ShopPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 pb-28 lg:pb-8">
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_350px] lg:items-start lg:gap-6">
-        <div className="min-w-0 space-y-5">
-          {!settings.storeOpen && (
-            <div
-              role="status"
-              className="bg-turmeric-light text-turmeric-foreground rounded-2xl border border-amber-300/70 px-4 py-3 text-sm font-medium"
-            >
-              {t('shop.storePausedBanner', {
-                defaultValue:
-                  'Store is currently paused for new online orders. You can still browse items; existing orders are unaffected.',
-              })}
-            </div>
+    <div className="space-y-8 px-4 py-4 pb-28 sm:px-8 sm:py-6 lg:space-y-12 lg:pb-12">
+      {!settings.storeOpen && (
+        <div
+          role="status"
+          className="bg-turmeric-light text-turmeric-foreground rounded-[12px] border border-amber-300/70 px-4 py-3 text-sm font-medium"
+        >
+          {t('shop.storePausedBanner', {
+            defaultValue:
+              'Store is currently paused for new online orders. You can still browse items; existing orders are unaffected.',
+          })}
+        </div>
+      )}
+
+      <ShopHero featuredVegetables={catalog.data ?? []} />
+
+      {Boolean(user) && category === 'ALL' && !search.trim() && (
+        <SavedBasketsSection compact />
+      )}
+
+      {category === 'ALL' && !search.trim() && (publicCombos.data ?? []).length > 0 && (
+        <ShopCombosSection
+          combos={publicCombos.data ?? []}
+          usualVegetables={usualVegetables}
+        />
+      )}
+
+      <ShopFeaturedCategories
+        categories={categories}
+        vegetables={catalog.data ?? []}
+        selectedCategory={category}
+        onSelectCategory={setCategory}
+      />
+
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-organic text-foreground text-[26px] font-normal sm:text-[32px]">
+            {t('shop.catalogHeading', { defaultValue: 'Fresh Vegetables' })}
+          </h2>
+          {hasCatalogData && (
+            <span className="text-brand-muted money-num text-xs font-medium">
+              {filtered.length} {t('shop.itemsCountLabel', { defaultValue: 'items' })}
+            </span>
           )}
-          <ShopHero featuredVegetables={catalog.data ?? []} />
-
-          {Boolean(user) && category === 'ALL' && !search.trim() && (
-            <SavedBasketsSection compact />
-          )}
-
-          {category === 'ALL' && !search.trim() && (publicCombos.data ?? []).length > 0 && (
-            <ShopCombosSection
-              combos={publicCombos.data ?? []}
-              usualVegetables={usualVegetables}
-            />
-          )}
-
-          <ShopFeaturedCategories
-            categories={categories}
-            vegetables={catalog.data ?? []}
-            selectedCategory={category}
-            onSelectCategory={setCategory}
-          />
-
-          <ShopToolbar
-            search={search}
-            onSearchChange={setSearch}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            category={category}
-            onCategoryChange={setCategory}
-            inStockOnly={inStockOnly}
-            onInStockOnlyChange={setInStockOnly}
-            categories={categories}
-            favouritesCount={favouriteIds.length}
-          />
-
-          {usualVegetables.length > 0 && category === 'ALL' && !search.trim() && (
-            <section className="space-y-3" data-testid="shop-your-usual-section">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <SectionHeader
-                  title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
-                  count={usualVegetables.length}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddAllUsuals}
-                  className="rounded-full"
-                >
-                  <Plus className="size-3.5" aria-hidden />
-                  {t('shop.addAllUsuals', { defaultValue: 'Add all usuals' })}
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-4">
-                {usualVegetables.map((veg) => (
-                  <VegetableCard key={`usual-${veg.id}`} vegetable={veg} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {catalog.isPending || catalog.isLoading ? (
-            <ProductGridSkeleton count={6} />
-          ) : catalog.isError ? (
-            <ErrorState onRetry={() => void catalog.refetch()} />
-          ) : !hasCatalogData ? (
-            <EmptyState
-              icon={<Sprout className="size-8" aria-hidden />}
-              title={t('shop.emptyCatalog')}
-              actionLabel={t('common.retry')}
-              onAction={() => void catalog.refetch()}
-            />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              icon={<Search className="size-8" aria-hidden />}
-              title={t('common.noResults')}
-              description={t('shop.noSearchMatchHint')}
-              actionLabel={t('shop.clearFilters')}
-              onAction={() => {
-                setSearch('')
-                setCategory('ALL')
-                setInStockOnly(false)
-              }}
-            />
-          ) : (
-            <div
-              id="shop-catalog"
-              className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"
-            >
-              {filtered.map((veg) => (
-                <VegetableCard key={veg.id} vegetable={veg} />
-              ))}
-            </div>
-          )}
-
-          <ShopTrustFooter />
         </div>
 
-        {/* Desktop persistent cart side panel */}
-        <aside className="hidden lg:sticky lg:top-20 lg:block">
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-organic text-lg font-bold">{t('cart.title')}</h2>
-              {totalCartLines > 0 && (
-                <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-0.5 text-xs font-bold">
-                  {totalCartLines}
-                </span>
-              )}
+        <ShopToolbar
+          search={search}
+          onSearchChange={setSearch}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          category={category}
+          onCategoryChange={setCategory}
+          inStockOnly={inStockOnly}
+          onInStockOnlyChange={setInStockOnly}
+          categories={categories}
+          favouritesCount={favouriteIds.length}
+        />
+
+        {usualVegetables.length > 0 && category === 'ALL' && !search.trim() && (
+          <section className="space-y-3" data-testid="shop-your-usual-section">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <SectionHeader
+                title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
+                count={usualVegetables.length}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddAllUsuals}
+                className="rounded-[10px]"
+              >
+                <Plus className="size-3.5" aria-hidden />
+                {t('shop.addAllUsuals', { defaultValue: 'Add all usuals' })}
+              </Button>
             </div>
-            <CartContents
-              onCheckout={handleCheckout}
-              onSaveAsBasket={handleOpenSaveBasket}
-              prunedNames={prunedNames}
-              onDismissPruned={() => setPrunedNames([])}
-              compactListClassName="max-h-80"
-            />
-          </Card>
-        </aside>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
+              {usualVegetables.map((veg) => (
+                <VegetableCard key={`usual-${veg.id}`} vegetable={veg} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {catalog.isPending || catalog.isLoading ? (
+          <ProductGridSkeleton count={8} />
+        ) : catalog.isError ? (
+          <ErrorState onRetry={() => void catalog.refetch()} />
+        ) : !hasCatalogData ? (
+          <EmptyState
+            icon={<Sprout className="size-8" aria-hidden />}
+            title={t('shop.emptyCatalog')}
+            actionLabel={t('common.retry')}
+            onAction={() => void catalog.refetch()}
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<Search className="size-8" aria-hidden />}
+            title={t('common.noResults')}
+            description={t('shop.noSearchMatchHint')}
+            actionLabel={t('shop.clearFilters')}
+            onAction={() => {
+              setSearch('')
+              setCategory('ALL')
+              setInStockOnly(false)
+            }}
+          />
+        ) : (
+          <div
+            id="shop-catalog"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5"
+          >
+            {filtered.map((veg) => (
+              <VegetableCard key={veg.id} vegetable={veg} />
+            ))}
+          </div>
+        )}
       </div>
+
+      <ShopTrustFooter />
 
       {/* Mobile sticky cart summary bar */}
       {(totalCartLines > 0 || prunedNames.length > 0) && (
         <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-xl px-4 lg:hidden">
           <Button
             size="xl"
-            className="flex w-full items-center justify-between rounded-2xl shadow-lg"
+            className="bg-primary hover:bg-[#245C42] flex w-full items-center justify-between rounded-[12px] shadow-lg"
             onClick={() => setCartOpen(true)}
           >
             <span className="inline-flex items-center gap-2">

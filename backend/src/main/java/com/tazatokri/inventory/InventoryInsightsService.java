@@ -31,6 +31,26 @@ public class InventoryInsightsService {
     private static final BigDecimal TREND_THRESHOLD = new BigDecimal("0.15");
     private static final BigDecimal CRITICAL_DAYS = new BigDecimal("2.0");
     private static final BigDecimal HIGH_DAYS = new BigDecimal("5.0");
+    private static final BigDecimal SLOW_MOVING_DAYS = new BigDecimal("10.0");
+    private static final BigDecimal WASTAGE_DAYS = new BigDecimal("14.0");
+    private static final int NEW_PRODUCT_GRACE_DAYS = 14;
+
+    public enum DemandCategory {
+        SELLING_WELL,
+        INCREASING_DEMAND,
+        DECREASING_DEMAND,
+        SLOW_MOVING,
+        NO_SALES_HISTORY,
+        INSUFFICIENT_DATA
+    }
+
+    public enum PurchaseAction {
+        BUY_TODAY,
+        PURCHASE_SOON,
+        STOCK_SUFFICIENT,
+        REDUCE_PURCHASE,
+        NO_DATA
+    }
 
     private final VegetableRepository vegetables;
     private final StockMovementRepository movements;
@@ -68,6 +88,10 @@ public class InventoryInsightsService {
             SalesTrend salesTrend,
             BigDecimal daysRemaining,
             StockoutRisk stockoutRisk,
+            DemandCategory demandCategory,
+            PurchaseAction purchaseAction,
+            boolean lowStock,
+            boolean wastageRisk,
             BigDecimal forecastDemand,
             BigDecimal suggestedPurchaseQty,
             String recommendationReason,
@@ -82,12 +106,14 @@ public class InventoryInsightsService {
             int criticalRiskCount,
             int highRiskCount,
             int lowDemandCount,
+            int noSalesHistoryCount,
             Map<String, BigDecimal> totalInventoryByUnit,
             BigDecimal estimatedInventoryValue,
             int valuedProductsCount,
             int uncostedProductsCount,
             List<ProductDemandInsight> bestSelling,
             List<ProductDemandInsight> slowMoving,
+            List<ProductDemandInsight> wastageRiskProducts,
             List<ProductDemandInsight> increasingDemand,
             List<ProductDemandInsight> decreasingDemand,
             List<ProductDemandInsight> products) {}
@@ -99,9 +125,9 @@ public class InventoryInsightsService {
         List<Vegetable> activeVegs = vegetables.findByActiveTrueOrderByNameEnAsc();
         if (activeVegs.isEmpty()) {
             return new InventoryInsightsDashboard(
-                    planningHorizonDays, 0, 0, 0, 0, 0, 0,
+                    planningHorizonDays, 0, 0, 0, 0, 0, 0, 0,
                     Map.of(), null, 0, 0,
-                    List.of(), List.of(), List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
 
         LocalDate today = LocalDate.now(clock);
@@ -135,6 +161,7 @@ public class InventoryInsightsService {
         int criticalCount = 0;
         int highCount = 0;
         int lowDemandCount = 0;
+        int noSalesHistoryCount = 0;
 
         List<ProductDemandInsight> insights = new ArrayList<>(activeVegs.size());
         for (Vegetable v : activeVegs) {
@@ -157,7 +184,7 @@ public class InventoryInsightsService {
             }
 
             ProductDemandInsight insight = buildInsight(v, unit, currentStock, d30, d7, planningHorizonDays,
-                    avgCost, stockValue);
+                    avgCost, stockValue, today);
             insights.add(insight);
 
             if (insight.totalQtySold30d().signum() > 0) {
@@ -168,8 +195,12 @@ public class InventoryInsightsService {
             } else if (insight.stockoutRisk() == StockoutRisk.HIGH) {
                 highCount++;
             }
-            if (insight.orderCount30d() < 2 || insight.totalQtySold30d().signum() == 0) {
+            if (insight.demandCategory() == DemandCategory.SLOW_MOVING
+                    || insight.demandCategory() == DemandCategory.DECREASING_DEMAND) {
                 lowDemandCount++;
+            } else if (insight.demandCategory() == DemandCategory.NO_SALES_HISTORY
+                    || insight.demandCategory() == DemandCategory.INSUFFICIENT_DATA) {
+                noSalesHistoryCount++;
             }
         }
 
@@ -180,8 +211,19 @@ public class InventoryInsightsService {
                 .toList();
 
         List<ProductDemandInsight> slowMoving = insights.stream()
-                .sorted(Comparator.comparing(ProductDemandInsight::totalQtySold30d)
-                        .thenComparing(ProductDemandInsight::orderCount30d))
+                .filter(i -> i.demandCategory() == DemandCategory.SLOW_MOVING)
+                .sorted(Comparator.comparing(
+                        ProductDemandInsight::daysRemaining,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(ProductDemandInsight::totalQtySold30d))
+                .limit(5)
+                .toList();
+
+        List<ProductDemandInsight> wastageRiskProducts = insights.stream()
+                .filter(ProductDemandInsight::wastageRisk)
+                .sorted(Comparator.comparing(
+                        ProductDemandInsight::daysRemaining,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
                 .toList();
 
@@ -207,12 +249,14 @@ public class InventoryInsightsService {
                 criticalCount,
                 highCount,
                 lowDemandCount,
+                noSalesHistoryCount,
                 inventoryByUnit,
                 finalEstimatedValue,
                 valuedCount,
                 uncostedCount,
                 bestSelling,
                 slowMoving,
+                wastageRiskProducts,
                 increasing,
                 decreasing,
                 insights);
@@ -239,7 +283,8 @@ public class InventoryInsightsService {
             DemandAgg d7,
             int horizonDays,
             BigDecimal avgCost,
-            BigDecimal stockValue) {
+            BigDecimal stockValue,
+            LocalDate today) {
 
         BigDecimal qty30 = d30.qty().setScale(3, RoundingMode.HALF_UP);
         BigDecimal qty7 = d7.qty().setScale(3, RoundingMode.HALF_UP);
@@ -250,9 +295,15 @@ public class InventoryInsightsService {
         BigDecimal avgDaily = avg30;
 
         boolean hasReliableHistory = orderCount >= 2 && avgDaily.signum() > 0;
+        boolean isNewlyAdded = v.getCreatedAt() != null
+                && v.getCreatedAt().isAfter(today.minusDays(NEW_PRODUCT_GRACE_DAYS).atStartOfDay());
 
         StockoutRisk risk;
         SalesTrend trend;
+        DemandCategory demandCategory;
+        PurchaseAction purchaseAction;
+        boolean lowStock;
+        boolean wastageRisk = false;
         BigDecimal daysRemaining = null;
         BigDecimal forecastDemand = BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
         BigDecimal suggestedPurchase = BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
@@ -261,9 +312,16 @@ public class InventoryInsightsService {
         if (!hasReliableHistory) {
             risk = StockoutRisk.NO_DATA;
             trend = SalesTrend.NO_DATA;
-            reason = orderCount == 0
-                    ? "No sales in the last 30 days; insufficient data for forecasting."
-                    : "Only 1 order in the last 30 days; insufficient history for reliable forecasting.";
+            purchaseAction = PurchaseAction.NO_DATA;
+            demandCategory = orderCount == 0 ? DemandCategory.NO_SALES_HISTORY : DemandCategory.INSUFFICIENT_DATA;
+            lowStock = currentStock.signum() <= 0;
+            if (orderCount == 0) {
+                reason = isNewlyAdded
+                        ? "Newly added product with no sales yet. Not enough sales data to recommend a purchase."
+                        : "No sales in the last 30 days. Not enough sales data to recommend a purchase.";
+            } else {
+                reason = "Only 1 order in the last 30 days. Not enough sales data to recommend a purchase.";
+            }
         } else {
             daysRemaining = currentStock.signum() <= 0
                     ? BigDecimal.ZERO.setScale(1, RoundingMode.HALF_UP)
@@ -276,6 +334,9 @@ public class InventoryInsightsService {
             } else {
                 risk = StockoutRisk.LOW;
             }
+
+            lowStock = risk == StockoutRisk.CRITICAL || risk == StockoutRisk.HIGH || currentStock.signum() <= 0;
+            wastageRisk = currentStock.signum() > 0 && daysRemaining.compareTo(WASTAGE_DAYS) > 0;
 
             BigDecimal ratio = avg7.subtract(avg30).divide(avg30, 4, RoundingMode.HALF_UP);
             if (ratio.compareTo(TREND_THRESHOLD) >= 0) {
@@ -291,17 +352,61 @@ public class InventoryInsightsService {
             suggestedPurchase = forecastDemand.subtract(currentStock).max(BigDecimal.ZERO)
                     .setScale(3, RoundingMode.HALF_UP);
 
-            if (suggestedPurchase.signum() > 0) {
+            if (risk == StockoutRisk.CRITICAL || currentStock.signum() <= 0) {
+                purchaseAction = PurchaseAction.BUY_TODAY;
+            } else if (suggestedPurchase.signum() > 0 || risk == StockoutRisk.HIGH) {
+                purchaseAction = PurchaseAction.PURCHASE_SOON;
+            } else if (wastageRisk
+                    || (trend == SalesTrend.DECREASING && daysRemaining.compareTo(SLOW_MOVING_DAYS) > 0)) {
+                purchaseAction = PurchaseAction.REDUCE_PURCHASE;
+            } else {
+                purchaseAction = PurchaseAction.STOCK_SUFFICIENT;
+            }
+
+            if (trend == SalesTrend.INCREASING) {
+                demandCategory = DemandCategory.INCREASING_DEMAND;
+            } else if (trend == SalesTrend.DECREASING) {
+                demandCategory = DemandCategory.DECREASING_DEMAND;
+            } else if (!isNewlyAdded && currentStock.signum() > 0
+                    && (orderCount <= 3 || daysRemaining.compareTo(SLOW_MOVING_DAYS) > 0)) {
+                demandCategory = DemandCategory.SLOW_MOVING;
+            } else {
+                demandCategory = DemandCategory.SELLING_WELL;
+            }
+
+            if (purchaseAction == PurchaseAction.BUY_TODAY) {
+                reason = suggestedPurchase.signum() > 0
+                        ? String.format(
+                                "Urgent: only ~%s days of stock left (%s %s/day). Buy %s %s today for the next %d days.",
+                                daysRemaining.toPlainString(),
+                                avgDaily.stripTrailingZeros().toPlainString(), unit,
+                                suggestedPurchase.stripTrailingZeros().toPlainString(), unit,
+                                horizonDays)
+                        : String.format(
+                                "Urgent: only ~%s days of stock left (%s %s/day). Buy today to avoid running out.",
+                                daysRemaining.toPlainString(),
+                                avgDaily.stripTrailingZeros().toPlainString(), unit);
+            } else if (purchaseAction == PurchaseAction.PURCHASE_SOON) {
+                reason = suggestedPurchase.signum() > 0
+                        ? String.format(
+                                "Low stock (~%s days left at %s %s/day). Purchase %s %s soon to cover %d-day demand (%s %s).",
+                                daysRemaining.toPlainString(),
+                                avgDaily.stripTrailingZeros().toPlainString(), unit,
+                                suggestedPurchase.stripTrailingZeros().toPlainString(), unit,
+                                horizonDays,
+                                forecastDemand.stripTrailingZeros().toPlainString(), unit)
+                        : String.format(
+                                "Low stock (~%s days left at %s %s/day). Plan a purchase soon.",
+                                daysRemaining.toPlainString(),
+                                avgDaily.stripTrailingZeros().toPlainString(), unit);
+            } else if (purchaseAction == PurchaseAction.REDUCE_PURCHASE) {
                 reason = String.format(
-                        "Est. %s days of stock left at %s %s/day. %d-day demand is %s %s; recommend buying %s %s.",
+                        "Overstocked (~%s days of stock left at %s %s/day). Reduce or pause purchasing to avoid wastage.",
                         daysRemaining.toPlainString(),
-                        avgDaily.stripTrailingZeros().toPlainString(), unit,
-                        horizonDays,
-                        forecastDemand.stripTrailingZeros().toPlainString(), unit,
-                        suggestedPurchase.stripTrailingZeros().toPlainString(), unit);
+                        avgDaily.stripTrailingZeros().toPlainString(), unit);
             } else {
                 reason = String.format(
-                        "Sufficient stock (~%s days remaining) to cover %d-day demand of %s %s.",
+                        "Stock sufficient (~%s days left) to cover %d-day demand of %s %s.",
                         daysRemaining.toPlainString(),
                         horizonDays,
                         forecastDemand.stripTrailingZeros().toPlainString(), unit);
@@ -322,6 +427,10 @@ public class InventoryInsightsService {
                 trend,
                 daysRemaining,
                 risk,
+                demandCategory,
+                purchaseAction,
+                lowStock,
+                wastageRisk,
                 forecastDemand,
                 suggestedPurchase,
                 reason,

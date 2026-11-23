@@ -29,7 +29,6 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
   const [selectedUnitId, setSelectedUnitId] = useState<string | number | undefined>(
     defaultOpt?.unitId,
   )
-  const [bump, setBump] = useState(false)
 
   // Always resolve against current options so async catalog refreshes keep valid selection
   const selectedUnit: PublicUnitOption | undefined =
@@ -97,15 +96,13 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
           ? String(vegetable.availableStock)
           : undefined,
     })
-    setBump(true)
-    setTimeout(() => setBump(false), 240)
   }
 
   return (
-    <Card className="bg-card flex h-full flex-col justify-between overflow-hidden rounded-2xl transition-shadow duration-200 hover:shadow-md">
+    <Card className="bg-card border-border group flex h-full flex-col justify-between overflow-hidden rounded-[16px] border shadow-[0_3px_12px_rgba(34,44,35,0.04)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(34,44,35,0.08)]">
       <div>
-        {/* Edge-to-edge 1:1 vegetable photo / category wash illustration (no inner border box) */}
-        <div className={`relative ${bump ? 'animate-bump' : ''}`}>
+        {/* Edge-to-edge 1:1 vegetable photo with warm neutral backdrop */}
+        <div className="relative overflow-hidden bg-[#FBF9F4]">
           <VegetableImage
             nameEn={vegetable.nameEn}
             nameMr={vegetable.nameMr}
@@ -114,7 +111,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             category={vegetable.category}
             alt={name(vegetable)}
             size="card"
-            className="rounded-none border-0"
+            className="rounded-none border-0 transition-transform duration-200 ease-out group-hover:scale-[1.03]"
           />
           <button
             type="button"
@@ -131,30 +128,28 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
               aria-hidden
             />
           </button>
-          <div className="absolute top-2.5 right-2.5">
-            {/* Customer view strictly shows "In stock" or "Out of stock" — never "Low stock" */}
-            <StatusBadge
-              kind="stock"
-              status={vegetable.inStock ? 'IN_STOCK' : 'OUT_OF_STOCK'}
-              className="shadow-xs backdrop-blur-xs"
-            />
-          </div>
+          {!vegetable.inStock && (
+            <div className="absolute top-2.5 right-2.5">
+              <StatusBadge
+                kind="stock"
+                status="OUT_OF_STOCK"
+                className="shadow-xs backdrop-blur-xs"
+              />
+            </div>
+          )}
         </div>
 
-        <div className="space-y-3 p-4 pb-3">
-          {/* Native-language name large, secondary English name small, base price prominent */}
-          <div className="space-y-1">
-            <h3 className="font-organic text-foreground break-words text-lg leading-snug font-bold sm:text-xl">
+        <div className="space-y-2.5 p-2.5 pb-2 min-[390px]:p-3.5 min-[390px]:pb-2.5 sm:space-y-3 sm:p-4 sm:pb-3">
+          <div className="space-y-0.5">
+            <h3 className="text-foreground break-words text-[15px] leading-snug font-semibold sm:text-[16px]">
               {name(vegetable)}
             </h3>
             {subtitle(vegetable) && (
-              <p className="text-muted-foreground break-words text-xs font-medium">
+              <p className="text-brand-muted break-words text-[12px] font-medium">
                 {subtitle(vegetable)}
               </p>
             )}
           </div>
-
-          <PriceTag price={vegetable.pricePerUnit} unitLabel={unitLabel} size="lg" />
 
           {/* Ascending label-only size chips with subtle default dot */}
           <div
@@ -174,10 +169,10 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
                   aria-checked={active}
                   disabled={optExceedsTotalStock}
                   onClick={() => setSelectedUnitId(opt.unitId)}
-                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
+                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
                     active
-                      ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
-                      : 'border-border bg-secondary/70 text-secondary-foreground hover:bg-secondary'
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-secondary/60 text-secondary-foreground hover:bg-secondary'
                   }`}
                 >
                   {opt.defaultOption && (
@@ -197,30 +192,31 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
       </div>
 
       {/* Selected unit rate + Add / Stepper */}
-      <div className="border-border/70 flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3">
+      <div className="border-border/80 flex flex-col items-stretch gap-2 border-t px-2.5 py-2.5 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[390px]:px-3.5 min-[390px]:py-3 sm:px-4">
         <div className="min-w-0">
           <PriceTag
-            price={selectedUnit?.price ?? null}
-            unitLabel={selectedUnit?.label}
-            size="md"
+            price={selectedUnit?.price ?? vegetable.pricePerUnit}
+            unitLabel={selectedUnit?.label ?? unitLabel}
+            size="lg"
+            className="[&>span:first-child]:text-[16px] sm:[&>span:first-child]:text-[18px]"
           />
         </div>
 
         {!vegetable.inStock || !hasPrice ? (
-          <StatusBadge kind="stock" status="OUT_OF_STOCK" />
+          <StatusBadge kind="stock" status="OUT_OF_STOCK" className="self-start min-[380px]:self-auto" />
         ) : inCart ? (
-          <div className="flex items-center gap-1.5" aria-live="polite">
+          <div className="flex h-10 w-full shrink-0 items-center justify-between rounded-[10px] border border-primary/20 bg-secondary/70 px-1 min-[380px]:w-[104px]" aria-live="polite">
             <button
               type="button"
               onClick={() =>
                 updateCount(String(vegetable.id), String(selectedUnit!.unitId), inCart.count - 1)
               }
               aria-label={t('common.decrease', { defaultValue: 'Decrease' })}
-              className="touch-target bg-secondary text-secondary-foreground inline-flex items-center justify-center rounded-full transition-colors duration-150"
+              className="text-primary hover:bg-card inline-flex size-8 items-center justify-center rounded-[8px] transition-colors duration-150"
             >
-              <Minus className="size-4" aria-hidden />
+              <Minus className="size-3.5" aria-hidden />
             </button>
-            <span className="money-num w-6 text-center text-sm font-bold">{inCart.count}</span>
+            <span className="money-num text-foreground w-6 text-center text-sm font-bold">{inCart.count}</span>
             <button
               type="button"
               disabled={!canAddSelected}
@@ -230,9 +226,9 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
                 }
               }}
               aria-label={t('common.increase', { defaultValue: 'Increase' })}
-              className="touch-target bg-primary text-primary-foreground inline-flex items-center justify-center rounded-full transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45"
+              className="bg-primary text-primary-foreground hover:bg-[#245C42] inline-flex size-8 items-center justify-center rounded-[8px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <Plus className="size-4" aria-hidden />
+              <Plus className="size-3.5" aria-hidden />
             </button>
           </div>
         ) : (
@@ -240,7 +236,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             size="sm"
             disabled={!canAddSelected}
             onClick={handleAdd}
-            className="min-h-11 rounded-full px-4"
+            className="bg-primary hover:bg-[#245C42] h-10 w-full shrink-0 rounded-[10px] px-4 text-[14px] font-semibold min-[380px]:w-auto"
           >
             <ShoppingBasket className="size-4 shrink-0" aria-hidden />
             <span>{t('shop.addToCart')}</span>

@@ -93,6 +93,18 @@ export function useAssignDelivery() {
   })
 }
 
+export function useUnassignDelivery() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, note }: { orderId: number | string; note?: string }) =>
+      deliveryApi.unassignOrder(orderId, note),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: deliveryKeys.all })
+      void qc.invalidateQueries({ queryKey: ordersKeys.all })
+    },
+  })
+}
+
 export function useReturnDeliveryToStore() {
   const qc = useQueryClient()
   return useMutation({

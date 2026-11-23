@@ -62,3 +62,36 @@ export interface ChangePasswordRequest {
 export interface ChangePasswordResponse {
   message: string
 }
+
+export interface ForgotPasswordRequest {
+  phone: string
+}
+
+export interface ForgotPasswordResponse {
+  message: string
+  resetToken: string
+  expiresInMinutes: number
+  devOtp?: string | null
+}
+
+export interface ResetPasswordRequest {
+  phone: string
+  otp: string
+  resetToken: string
+  newPassword: string
+}
+
+export interface VerificationChallengeResponse {
+  message: string
+  challengeToken: string
+  maskedTarget: string
+  expiresInMinutes: number
+  devOtp?: string | null
+}
+
+export interface PhoneUpdateResponse {
+  message: string
+  user: UserResponse
+  token: string
+  expiresInMinutes: number
+}

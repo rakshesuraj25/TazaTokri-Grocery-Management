@@ -312,7 +312,14 @@ export default function CheckoutPage() {
         />
       </div>
 
-      <AddAddressDialog open={addAddrOpen} onClose={() => setAddAddrOpen(false)} />
+      <AddAddressDialog
+        open={addAddrOpen}
+        onClose={() => setAddAddrOpen(false)}
+        onCreated={(addr) => {
+          setSelectedAddressId(String(addr.id))
+          setStep(2)
+        }}
+      />
     </div>
   )
 }

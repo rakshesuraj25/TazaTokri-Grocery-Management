@@ -39,6 +39,15 @@ export const ordersApi = {
       body,
     ),
 
+  failOnlinePayment: (
+    orderId: number | string,
+    body: { razorpayOrderId: string; razorpayPaymentId?: string; reason?: string },
+  ) =>
+    api.post<{ orderId: number; status: OrderStatus }>(
+      `/api/customer/orders/${orderId}/payment/fail`,
+      body,
+    ),
+
   /** Staff / Owner order endpoints */
   listStaffOrders: (params: { date?: string; status?: OrderStatus } = {}) => {
     const qs = new URLSearchParams()

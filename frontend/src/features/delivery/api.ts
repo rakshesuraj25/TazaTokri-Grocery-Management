@@ -35,6 +35,9 @@ export const deliveryApi = {
       deliveryUserId: Number(deliveryUserId),
     }),
 
+  unassignOrder: (orderId: number | string, note?: string) =>
+    api.post<DeliveryAttempt>(`/api/orders/${orderId}/unassign`, { note }),
+
   returnToStore: (orderId: number | string, note?: string) =>
     api.post<DeliveryAttempt>(`/api/orders/${orderId}/return-to-store`, { note }),
 

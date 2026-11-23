@@ -117,12 +117,22 @@ export function AddAddressDialog({ open, onClose, onCreated }: AddAddressDialogP
 
           <div className="space-y-1.5">
             <Label htmlFor="addr-label">{t('addresses.label')}</Label>
-            <Input id="addr-label" {...register('label')} />
+            <Input id="addr-label" aria-invalid={!!errors.label} {...register('label')} />
+            {errors.label?.message && (
+              <p role="alert" className="text-destructive text-xs font-medium">
+                {errors.label.message}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="addr-line1">{t('addresses.line1')}</Label>
-            <Input id="addr-line1" {...register('line1')} />
+            <Input id="addr-line1" aria-invalid={!!errors.line1} {...register('line1')} />
+            {errors.line1?.message && (
+              <p role="alert" className="text-destructive text-xs font-medium">
+                {errors.line1.message}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">

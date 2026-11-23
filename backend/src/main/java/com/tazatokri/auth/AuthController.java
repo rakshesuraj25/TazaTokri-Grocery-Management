@@ -2,6 +2,7 @@ package com.tazatokri.auth;
 
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,10 +24,20 @@ public class AuthController {
 
 	private final UserService userService;
 	private final AuthService authService;
+	private final AccountSecurityService accountSecurityService;
 
 	public AuthController(UserService userService, AuthService authService) {
+		this(userService, authService, null);
+	}
+
+	@Autowired
+	public AuthController(
+			UserService userService,
+			AuthService authService,
+			AccountSecurityService accountSecurityService) {
 		this.userService = userService;
 		this.authService = authService;
+		this.accountSecurityService = accountSecurityService;
 	}
 
 	@PostMapping("/login")
@@ -52,6 +63,19 @@ public class AuthController {
 			Authentication auth) {
 		authService.changePassword(auth.getName(), request);
 		return Map.of("message", "Password updated successfully");
+	}
+
+	@PostMapping("/forgot-password")
+	public AccountSecurityService.ForgotPasswordResponse forgotPassword(
+			@Valid @RequestBody AccountSecurityService.ForgotPasswordRequest request) {
+		return accountSecurityService.forgotPassword(request);
+	}
+
+	@PostMapping("/reset-password")
+	public Map<String, String> resetPassword(
+			@Valid @RequestBody AccountSecurityService.ResetPasswordRequest request) {
+		accountSecurityService.resetPassword(request);
+		return Map.of("message", "Password has been reset successfully. Please sign in with your new password.");
 	}
 
 }

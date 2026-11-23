@@ -38,10 +38,10 @@ export function ShopTrustFooter() {
     <footer className="mt-10 space-y-6 pt-4 pb-6">
       <WeaveDivider />
 
-      <div className="bg-surface-subtle/90 grid gap-5 rounded-3xl px-5 py-6 sm:grid-cols-3 sm:px-7">
+      <div className="bg-surface-subtle/90 border-border/80 grid gap-5 rounded-2xl border px-5 py-6 sm:grid-cols-3 sm:px-7">
         {pillars.map((p) => (
           <div key={p.title} className="flex items-start gap-3">
-            <div className="bg-card text-primary flex size-10 shrink-0 items-center justify-center rounded-full shadow-2xs">
+            <div className="bg-card border-border/80 text-primary flex size-10 shrink-0 items-center justify-center rounded-xl border shadow-2xs">
               {p.icon}
             </div>
             <div className="space-y-0.5">
@@ -52,7 +52,7 @@ export function ShopTrustFooter() {
         ))}
       </div>
 
-      <div className="bg-card border-border/80 grid gap-6 rounded-3xl border px-5 py-6 sm:grid-cols-[1.4fr_1fr_1fr] sm:px-7">
+      <div className="bg-card border-border/90 grid gap-6 rounded-2xl border px-5 py-6 shadow-2xs sm:grid-cols-[1.4fr_1fr_1fr] sm:px-7">
         <div className="space-y-2.5">
           <Logo size="sm" showDevanagari />
           <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">

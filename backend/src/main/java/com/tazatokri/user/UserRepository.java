@@ -15,6 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByPhone(String phone);
 
     boolean existsByPhone(String phone);
+
+    boolean existsByEmailIgnoreCase(String email);
+
+    @Query("select count(u) from User u where :role member of u.roles and u.active = true")
+    long countActiveByRole(@Param("role") Role role);
     
     @org.springframework.data.jpa.repository.Query(
             "select count(u) > 0 from User u where :role member of u.roles")

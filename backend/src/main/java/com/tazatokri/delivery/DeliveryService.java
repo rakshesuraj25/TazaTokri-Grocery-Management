@@ -347,6 +347,40 @@ public class DeliveryService {
 	}
 
 	@Transactional
+	public AttemptResponse unassign(Long orderId, String note, String actorPhone) {
+		User actor = findUser(actorPhone);
+		CustomerOrder o = lock(orderId);
+		DeliveryAttempt active = attempts.findFirstByOrderIdAndStatusIn(orderId, ACTIVE)
+				.orElseThrow(() -> new InvalidOrderStateException(
+						"No active delivery assignment found for order #" + orderId));
+
+		LocalDateTime now = LocalDateTime.now();
+		String prevStatus = active.getStatus().name();
+		active.setStatus(DeliveryStatus.UNASSIGNED);
+		active.setFinishedAt(now);
+		if (note != null && !note.isBlank()) {
+			active.setDeliveryNote(note.trim());
+		}
+		DeliveryAttempt saved = attempts.save(active);
+
+		if (o.getStatus() == OrderStatus.OUT_FOR_DELIVERY) {
+			o.setStatus(OrderStatus.PACKED);
+		}
+		invalidateActiveOtps(orderId);
+
+		recordAudit(
+				orderId,
+				saved.getId(),
+				"UNASSIGNED",
+				prevStatus,
+				DeliveryStatus.UNASSIGNED.name(),
+				actor,
+				(note != null && !note.isBlank()) ? note.trim() : "Delivery unassigned by staff");
+
+		return AttemptResponse.from(saved);
+	}
+
+	@Transactional
 	public AttemptResponse returnToStore(Long orderId, String note, String actorPhone) {
 		User actor = findUser(actorPhone);
 		CustomerOrder o = lock(orderId);
@@ -793,9 +827,22 @@ public class DeliveryService {
 		requireAttempt(a, DeliveryStatus.OUT_FOR_DELIVERY);
 
 		if (otpRepo != null && !a.isOtpVerified()) {
-			throw new BadRequestException(
-					"Delivery OTP verification (or an authorized manual exception) is required before marking order #"
-							+ orderId + " as DELIVERED.");
+			String recipient = req != null ? req.recipientName() : null;
+			if (recipient != null && !recipient.isBlank()) {
+				String cleanRecipient = recipient.trim();
+				a.setOtpVerified(true);
+				a.setOtpVerifiedAt(LocalDateTime.now());
+				a.setOtpVerifiedBy(actor.getId());
+				a.setOtpVerificationMethod("RECIPIENT_HANDOVER");
+				a.setOtpOverrideReason("Delivered to: " + cleanRecipient);
+			} else {
+				throw new BadRequestException(
+						"Delivery OTP verification (or recipient confirmation) is required before marking order #"
+								+ orderId + " as DELIVERED.");
+			}
+		}
+		if (req != null && req.deliveryNote() != null && !req.deliveryNote().isBlank()) {
+			a.setDeliveryNote(req.deliveryNote().trim());
 		}
 		if (requirePodPhoto && evidenceRepo != null && !evidenceRepo.existsByDeliveryAttemptId(a.getId())) {
 			throw new BadRequestException(

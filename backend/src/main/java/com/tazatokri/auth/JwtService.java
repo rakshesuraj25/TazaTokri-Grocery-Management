@@ -51,6 +51,19 @@ public class JwtService {
                 .compact();
     }
 
+    public String generatePurposeToken(String subject, String purpose, java.util.Map<String, Object> extraClaims, long ttlMinutes) {
+        Instant now = Instant.now();
+        var builder = Jwts.builder()
+                .subject(subject)
+                .claim("purpose", purpose)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(ttlMinutes, ChronoUnit.MINUTES)));
+        if (extraClaims != null) {
+            extraClaims.forEach(builder::claim);
+        }
+        return builder.signWith(key).compact();
+    }
+
     public long getExpirationMinutes() {
         return expirationMinutes;
     }
