@@ -11,7 +11,9 @@ ALTER TABLE purchases
     ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'COMPLETED',
     ADD COLUMN cancelled_at DATETIME(6) NULL,
     ADD COLUMN cancelled_by BIGINT NULL,
-    ADD COLUMN cancel_reason VARCHAR(255) NULL,
+    ADD COLUMN cancel_reason VARCHAR(255) NULL;
+
+ALTER TABLE purchases
     ADD CONSTRAINT uk_purchases_idempotency_key UNIQUE (idempotency_key),
     ADD INDEX idx_purchases_supplier_date (supplier_id, purchase_date),
     ADD INDEX idx_purchases_invoice (invoice_number);
