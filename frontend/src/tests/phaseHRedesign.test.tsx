@@ -163,6 +163,59 @@ describe('Phase H — Redesign, i18n parity & screen regressions', () => {
 
   it('renders Owner Dashboard operational cards and alerts cleanly without mock data', async () => {
     server.use(
+      http.get('*/api/reports/overview', () =>
+        HttpResponse.json({
+          kpis: {
+            date: '2026-11-15',
+            todaySales: '3450.00',
+            yesterdaySales: '3000.00',
+            salesChangeAmount: '450.00',
+            salesChangePercent: '15.0',
+            todayOrders: 18,
+            pendingOrders: 2,
+            completedOrders: 16,
+            cancelledOrders: 0,
+            averageOrderValue: '191.67',
+          },
+          orderStatus: {
+            pendingConfirmation: 1,
+            confirmed: 1,
+            preparing: 0,
+            outForDelivery: 0,
+            delivered: 16,
+            cancelled: 0,
+          },
+          inventoryAlerts: [
+            {
+              vegetableId: 1,
+              name: 'Tomato',
+              unit: 'KG',
+              currentStock: '3.000',
+              alertType: 'LOW_STOCK',
+              daysRemaining: '1.0',
+              suggestedPurchaseQty: '10.000',
+            },
+          ],
+          topSellingToday: [
+            {
+              vegetableId: 1,
+              name: 'Tomato',
+              unit: 'KG',
+              quantitySold: '30.000',
+              revenue: '1200.00',
+            },
+          ],
+          financials: {
+            todayCashSales: '2200.00',
+            todayDigitalSales: '1250.00',
+            codCollected: '0.00',
+            codSettledToShop: '0.00',
+            codPendingSettlement: '0.00',
+            supplierOutstandingPayable: '0.00',
+          },
+          recentActivity: [],
+        }),
+      ),
       http.get('*/api/reports/daily', () =>
         HttpResponse.json({
           date: '2026-11-15',
@@ -202,7 +255,7 @@ describe('Phase H — Redesign, i18n parity & screen regressions', () => {
     await waitFor(() => {
       expect(screen.getByText('₹3,450.00')).toBeInTheDocument()
     })
-    expect(screen.getByText(/Low & out-of-stock alerts/i)).toBeInTheDocument()
-    expect(screen.getByText(/Cash settlements & refunds/i)).toBeInTheDocument()
+    expect(screen.getByText(/Inventory Alerts/i)).toBeInTheDocument()
+    expect(screen.getByText(/Financial Overview/i)).toBeInTheDocument()
   })
 })

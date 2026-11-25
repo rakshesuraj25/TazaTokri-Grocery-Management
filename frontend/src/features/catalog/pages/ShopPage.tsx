@@ -166,7 +166,7 @@ export default function ShopPage() {
   }
 
   return (
-    <div className="space-y-8 px-4 py-4 pb-28 sm:px-8 sm:py-6 lg:space-y-12 lg:pb-12">
+    <div className="space-y-7 px-3 py-4 pb-28 min-[390px]:px-4 sm:px-6 sm:py-6 lg:space-y-10 lg:px-8 lg:pb-12">
       {!settings.storeOpen && (
         <div
           role="status"
@@ -276,7 +276,7 @@ export default function ShopPage() {
         ) : (
           <div
             id="shop-catalog"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5"
+            className="grid grid-cols-2 gap-2.5 min-[390px]:gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5"
           >
             {filtered.map((veg) => (
               <VegetableCard key={veg.id} vegetable={veg} />

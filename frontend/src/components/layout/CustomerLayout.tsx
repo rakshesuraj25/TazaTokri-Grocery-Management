@@ -28,8 +28,8 @@ export function CustomerLayout() {
   return (
     <div className="storefront-theme bg-background text-foreground flex min-h-screen flex-col">
       {/* Editorial customer header */}
-      <header className="bg-card/95 sticky top-0 z-40 border-b border-[#E8E2D6] backdrop-blur-md">
-        <div className="mx-auto flex h-[64px] max-w-[1240px] items-center justify-between gap-1.5 px-3 min-[390px]:gap-2 min-[390px]:px-4 sm:h-[70px] sm:px-8">
+      <header className="bg-card/95 border-border sticky top-0 z-40 border-b backdrop-blur-md">
+        <div className="mx-auto flex h-[60px] max-w-[1280px] items-center justify-between gap-1.5 px-3 min-[390px]:gap-2 min-[390px]:px-4 sm:h-[68px] sm:px-6 lg:px-8">
           <Link to="/shop" className="touch-target flex shrink-0 items-center">
             <Logo size="sm" className="min-[400px]:hidden" wordmarkClassName="text-base" />
             <Logo size="md" className="hidden min-[400px]:inline-flex" />
@@ -99,7 +99,7 @@ export function CustomerLayout() {
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-[1240px] flex-1 pb-20 lg:pb-12">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 pb-20 lg:pb-12">
         <Outlet />
       </main>
 
@@ -107,7 +107,7 @@ export function CustomerLayout() {
       <nav
         data-testid="customer-mobile-nav"
         aria-label={t('nav.shop')}
-        className="bg-card/95 border-border/80 fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-md lg:hidden"
+        className="bg-card/95 border-border fixed right-0 bottom-0 left-0 z-40 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
       >
         <div className="mx-auto grid max-w-6xl grid-cols-4">
           <NavLink

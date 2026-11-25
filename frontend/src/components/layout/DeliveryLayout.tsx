@@ -14,7 +14,7 @@ export function DeliveryLayout() {
   const displayIdentity = user?.fullName || user?.phone
 
   return (
-    <div className="bg-background min-h-screen">
+    <div className="delivery-theme bg-background text-foreground min-h-screen">
       <header className="bg-card/90 border-border sticky top-0 z-40 border-b backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-2 px-4 py-2">
           <Link
@@ -48,7 +48,7 @@ export function DeliveryLayout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-lg p-4 pb-8">
+      <main className="mx-auto max-w-2xl px-3.5 py-4 pb-10 sm:px-6">
         <Outlet />
       </main>
     </div>

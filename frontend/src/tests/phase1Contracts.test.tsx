@@ -127,7 +127,7 @@ describe('Phase 1 contract & security corrections', () => {
     )
 
     expect(await screen.findByText('#42')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /deliver/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /fail/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^delivered$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^unable to deliver$/i })).toBeInTheDocument()
   })
 })

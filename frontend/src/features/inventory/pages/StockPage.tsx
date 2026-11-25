@@ -194,8 +194,9 @@ export default function StockPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
+        serif
         title={t('staff.stock.title')}
         count={rawItems.length}
         breadcrumbs={[

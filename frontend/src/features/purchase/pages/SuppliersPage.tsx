@@ -157,9 +157,10 @@ export default function SuppliersPage() {
   const d = dashboard.data
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title={t('staff.purchase.suppliersTitle', { defaultValue: 'Suppliers & Payables' })}
+        serif
         count={d?.totalSuppliers}
         breadcrumbs={[
           { label: t('staff.groups.buy', { defaultValue: 'Buy' }) },

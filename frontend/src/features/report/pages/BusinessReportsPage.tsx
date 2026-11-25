@@ -95,9 +95,10 @@ export default function BusinessReportsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title="Business Reports & Analytics"
+        serif
         breadcrumbs={[{ label: 'Money' }, { label: 'Business Reports' }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">

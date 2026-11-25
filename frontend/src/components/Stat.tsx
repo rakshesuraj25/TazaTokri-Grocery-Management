@@ -39,8 +39,8 @@ export function Stat({
   className,
 }: StatProps) {
   const sharedClassName = cn(
-    'bg-card text-card-foreground border-border flex w-full items-start justify-between gap-3 rounded-2xl border p-4 text-left shadow-xs transition-all duration-150',
-    onClick && 'hover:border-primary/45 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    'bg-card text-card-foreground border-border flex w-full items-start justify-between gap-3 rounded-2xl border p-4 text-left shadow-[var(--shadow-card)] transition-all duration-150',
+    onClick && 'hover:border-primary/45 hover:shadow-[var(--shadow-floating)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     active && 'border-primary bg-sage/35 ring-2 ring-primary/20',
     className,
   )

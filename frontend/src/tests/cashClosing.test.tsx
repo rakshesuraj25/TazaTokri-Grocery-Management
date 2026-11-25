@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import CashClosingPage from '@/features/report/pages/CashClosingPage'
 import { cashClosingApi, type DailyCashTally } from '@/features/report/cashClosingApi'
+import { todayIST } from '@/lib/dates'
 
 function renderPage() {
   const qc = new QueryClient({
@@ -20,7 +21,7 @@ function renderPage() {
 }
 
 const sampleOpenTally: DailyCashTally = {
-  date: '2026-11-21',
+  date: todayIST(),
   status: 'OPEN',
   openingCash: 500,
   suggestedOpeningCash: 500,

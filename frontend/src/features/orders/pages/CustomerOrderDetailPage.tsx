@@ -270,7 +270,7 @@ export default function CustomerOrderDetailPage() {
     order.status === 'CONFIRMED'
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
+    <div className="mx-auto max-w-3xl space-y-4 px-3 py-4 min-[390px]:px-4 sm:px-6 sm:py-6">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="icon">

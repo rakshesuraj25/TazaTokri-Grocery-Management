@@ -53,9 +53,10 @@ export default function DashboardPage() {
   const data = overview.data
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title="Business Overview"
+        serif
         breadcrumbs={[{ label: 'Owner' }, { label: 'Business Overview' }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -95,20 +96,22 @@ export default function DashboardPage() {
         <>
           {/* 1. Primary KPI Cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Card className="rounded-3xl border p-4">
-              <p className="text-muted-foreground text-xs font-medium">Today&apos;s Sales</p>
-              <p className="font-display mt-1 text-xl font-extrabold">
+            <Card className="border-border rounded-2xl border p-4 shadow-[var(--shadow-card)]">
+              <p className="text-muted-foreground truncate text-xs font-medium tracking-wide uppercase">
+                Today&apos;s Sales
+              </p>
+              <p className="font-display money-num text-foreground mt-1 text-2xl leading-none font-extrabold">
                 {formatMoney(data.kpis.todaySales)}
               </p>
-              <div className="mt-1 flex items-center gap-1 text-xs">
+              <div className="mt-1.5 flex items-center gap-1 text-xs">
                 {data.kpis.salesChangePercent !== null ? (
                   Number(data.kpis.salesChangeAmount) >= 0 ? (
-                    <span className="inline-flex items-center font-semibold text-emerald-700">
+                    <span className="text-primary inline-flex items-center font-semibold">
                       <ArrowUpRight className="size-3.5" />+{data.kpis.salesChangePercent}% vs
                       yesterday
                     </span>
                   ) : (
-                    <span className="inline-flex items-center font-semibold text-rose-700">
+                    <span className="text-tomato inline-flex items-center font-semibold">
                       <ArrowDownRight className="size-3.5" />
                       {data.kpis.salesChangePercent}% vs yesterday
                     </span>
@@ -136,7 +139,7 @@ export default function DashboardPage() {
           </div>
 
           {/* 2. Quick Actions */}
-          <Card className="rounded-3xl border p-4">
+          <Card className="border-border rounded-2xl border p-4 shadow-[var(--shadow-card)]">
             <h2 className="mb-3 text-sm font-bold">Quick Actions</h2>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm" className="rounded-full">
@@ -179,7 +182,7 @@ export default function DashboardPage() {
 
           {/* 3. Order Status Overview & Financial Overview */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="rounded-3xl border">
+            <Card className="border-border rounded-2xl border shadow-[var(--shadow-card)]">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Package className="size-4" /> Order Overview (Today)

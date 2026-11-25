@@ -283,13 +283,13 @@ export function StaffLayout() {
   }
 
   return (
-    <div className="bg-background flex min-h-screen">
+    <div className="admin-theme bg-background text-foreground flex min-h-screen">
       {/* Desktop collapsible / Tablet compact sidebar */}
       <aside
         data-testid="staff-sidebar"
         data-collapsed={collapsed ? 'true' : 'false'}
         className={cn(
-          'bg-card border-border/80 hidden flex-shrink-0 flex-col border-r transition-[width] duration-200 md:flex',
+          'bg-card border-border hidden flex-shrink-0 flex-col border-r transition-[width] duration-200 md:flex',
           collapsed ? 'w-[74px]' : 'w-64',
         )}
       >
@@ -439,7 +439,7 @@ export function StaffLayout() {
 
       {/* Main Content Workspace */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="bg-card/95 border-border/80 sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b px-3 backdrop-blur-md sm:px-5">
+        <header className="bg-card/95 border-border sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b px-3 backdrop-blur-md sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             {/* Mobile slide-out drawer trigger */}
             <Button

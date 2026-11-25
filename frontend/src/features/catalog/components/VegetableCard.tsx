@@ -99,10 +99,10 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
   }
 
   return (
-    <Card className="bg-card border-border group flex h-full flex-col justify-between overflow-hidden rounded-[16px] border shadow-[0_3px_12px_rgba(34,44,35,0.04)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(34,44,35,0.08)]">
+    <Card className="bg-card border-border group flex h-full flex-col justify-between overflow-hidden rounded-[14px] border shadow-[var(--shadow-card)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[var(--shadow-floating)] sm:rounded-[16px]">
       <div>
         {/* Edge-to-edge 1:1 vegetable photo with warm neutral backdrop */}
-        <div className="relative overflow-hidden bg-[#FBF9F4]">
+        <div className="bg-background relative overflow-hidden">
           <VegetableImage
             nameEn={vegetable.nameEn}
             nameMr={vegetable.nameMr}
@@ -192,7 +192,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
       </div>
 
       {/* Selected unit rate + Add / Stepper */}
-      <div className="border-border/80 flex flex-col items-stretch gap-2 border-t px-2.5 py-2.5 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[390px]:px-3.5 min-[390px]:py-3 sm:px-4">
+      <div className="border-border/80 flex flex-wrap items-center justify-between gap-2 border-t px-2.5 py-2.5 min-[390px]:px-3.5 min-[390px]:py-3 sm:px-4">
         <div className="min-w-0">
           <PriceTag
             price={selectedUnit?.price ?? vegetable.pricePerUnit}
@@ -203,16 +203,16 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
         </div>
 
         {!vegetable.inStock || !hasPrice ? (
-          <StatusBadge kind="stock" status="OUT_OF_STOCK" className="self-start min-[380px]:self-auto" />
+          <StatusBadge kind="stock" status="OUT_OF_STOCK" />
         ) : inCart ? (
-          <div className="flex h-10 w-full shrink-0 items-center justify-between rounded-[10px] border border-primary/20 bg-secondary/70 px-1 min-[380px]:w-[104px]" aria-live="polite">
+          <div className="border-primary/20 bg-accent flex h-9 shrink-0 items-center justify-between rounded-[9px] border px-1 sm:h-10 sm:w-[104px] sm:rounded-[10px]" aria-live="polite">
             <button
               type="button"
               onClick={() =>
                 updateCount(String(vegetable.id), String(selectedUnit!.unitId), inCart.count - 1)
               }
               aria-label={t('common.decrease', { defaultValue: 'Decrease' })}
-              className="text-primary hover:bg-card inline-flex size-8 items-center justify-center rounded-[8px] transition-colors duration-150"
+              className="text-primary hover:bg-card inline-flex size-7 items-center justify-center rounded-[7px] transition-colors duration-150 sm:size-8"
             >
               <Minus className="size-3.5" aria-hidden />
             </button>
@@ -226,7 +226,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
                 }
               }}
               aria-label={t('common.increase', { defaultValue: 'Increase' })}
-              className="bg-primary text-primary-foreground hover:bg-[#245C42] inline-flex size-8 items-center justify-center rounded-[8px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45"
+              className="bg-primary text-primary-foreground hover:bg-deep-green inline-flex size-7 items-center justify-center rounded-[7px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 sm:size-8"
             >
               <Plus className="size-3.5" aria-hidden />
             </button>
@@ -236,7 +236,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             size="sm"
             disabled={!canAddSelected}
             onClick={handleAdd}
-            className="bg-primary hover:bg-[#245C42] h-10 w-full shrink-0 rounded-[10px] px-4 text-[14px] font-semibold min-[380px]:w-auto"
+            className="bg-primary hover:bg-deep-green h-9 shrink-0 rounded-[9px] px-3.5 text-[13px] font-semibold sm:h-10 sm:rounded-[10px] sm:px-4 sm:text-[14px]"
           >
             <ShoppingBasket className="size-4 shrink-0" aria-hidden />
             <span>{t('shop.addToCart')}</span>

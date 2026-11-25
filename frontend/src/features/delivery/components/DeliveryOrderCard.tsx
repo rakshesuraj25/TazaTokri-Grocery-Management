@@ -43,11 +43,11 @@ export function DeliveryOrderCard({
   return (
     <Card
       data-testid={`delivery-order-card-${order.orderId}`}
-      className={`space-y-3.5 p-4 ${
+      className={`border-border space-y-3.5 rounded-2xl p-4 shadow-[var(--shadow-card)] ${
         order.deliveryStatus === 'OUT_FOR_DELIVERY'
-          ? 'border-primary/60 bg-primary/[0.02] shadow-sm'
+          ? 'border-primary/60 bg-primary/[0.03] ring-1 ring-primary/15'
           : order.deliveryStatus === 'FAILED'
-            ? 'border-destructive/40'
+            ? 'border-destructive/40 bg-destructive/[0.02]'
             : ''
       }`}
     >

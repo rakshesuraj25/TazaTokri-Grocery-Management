@@ -73,6 +73,7 @@ export default function DeliveryOrdersPage() {
       onTouchEnd={handleTouchEnd}
     >
       <PageHeader
+        serif
         title={t('delivery.title')}
         subtitle={t('delivery.pullToRefreshHint', {
           defaultValue: 'Pull down or tap refresh for new drops',

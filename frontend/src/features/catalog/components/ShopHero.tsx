@@ -40,11 +40,11 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
           <path d="M12 108C22 72 48 44 92 28C76 62 52 92 12 108Z" />
           <path d="M12 108C40 80 64 56 92 28" />
         </svg>
-        <div className="grid items-center gap-6 p-4 min-[390px]:p-5 md:grid-cols-[0.95fr_1.05fr] md:gap-8 md:p-8 lg:min-h-[460px] lg:grid-cols-[0.88fr_1.12fr] lg:gap-10 lg:p-12">
-          <div className="min-w-0 space-y-4 sm:space-y-5">
+        <div className="grid items-center gap-5 p-4 min-[390px]:p-5 md:grid-cols-[0.95fr_1.05fr] md:gap-8 md:p-8 lg:min-h-[420px] lg:grid-cols-[0.9fr_1.1fr] lg:gap-10 lg:p-10">
+          <div className="min-w-0 space-y-3.5 sm:space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="bg-secondary text-primary inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase">
-                <Sprout className="text-deep-green size-3.5 shrink-0" aria-hidden />
+              <span className="bg-accent text-accent-foreground inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase">
+                <Sprout className="text-primary size-3.5 shrink-0" aria-hidden />
                 <span>
                   {t('shop.pickedFresh', {
                     date: pickedDate,
@@ -59,22 +59,22 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
               </span>
             </div>
 
-            <div className="space-y-2.5 sm:space-y-3">
-              <h1 className="font-organic text-foreground text-[34px] leading-[1.08] font-normal tracking-[-0.015em] min-[390px]:text-[38px] sm:text-[44px] lg:text-[54px]">
+            <div className="space-y-2 sm:space-y-2.5">
+              <h1 className="font-organic text-foreground text-[28px] leading-[1.12] font-normal tracking-[-0.015em] min-[390px]:text-[32px] sm:text-[42px] lg:text-[50px]">
                 {t('shop.editorialHeroTitle', { defaultValue: 'Freshness for every home.' })}
               </h1>
-              <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed sm:text-[17px]">
+              <p className="text-muted-foreground max-w-md text-[14px] leading-relaxed sm:text-[16px]">
                 {t('shop.hero.subtitle', {
                   defaultValue: 'Good vegetables. Honest prices. Delivered to your home.',
                 })}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 pt-1">
+            <div className="flex flex-wrap items-center gap-3 pt-0.5 sm:gap-4">
               <Button
                 asChild
                 size="lg"
-                className="bg-primary text-primary-foreground hover:bg-[#245C42] h-12 rounded-[11px] px-7 text-[15px] font-semibold shadow-xs transition-colors duration-200"
+                className="bg-primary text-primary-foreground hover:bg-deep-green h-11 rounded-[10px] px-6 text-[14px] font-semibold shadow-xs transition-colors duration-200 sm:h-12 sm:px-7 sm:text-[15px]"
               >
                 <a href="#shop-catalog">
                   {t('shop.shopNowCta', { defaultValue: 'Shop fresh vegetables' })}
@@ -96,7 +96,7 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
           </div>
 
           {/* Large unobstructed editorial produce photography */}
-          <div className="bg-surface-subtle border-border relative aspect-[4/3] w-full overflow-hidden rounded-[18px] border md:h-[320px] md:aspect-auto lg:h-[380px]">
+          <div className="bg-surface-subtle border-border relative aspect-[16/10] w-full overflow-hidden rounded-[16px] border md:h-[310px] md:aspect-auto lg:h-[360px]">
             {!heroImgFailed ? (
               <img
                 src="/hero-produce.jpg"

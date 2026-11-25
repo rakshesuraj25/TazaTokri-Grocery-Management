@@ -67,8 +67,9 @@ export default function RiderOperationsPage() {
   }, [list])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
+        serif
         title="Riders & Delivery Operations"
         count={list.length}
         breadcrumbs={[{ label: 'Orders' }, { label: 'Riders & COD' }]}

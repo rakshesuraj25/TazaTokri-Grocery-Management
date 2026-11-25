@@ -111,7 +111,7 @@ export default function CustomerOrdersPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4">
+    <div className="mx-auto max-w-4xl space-y-5 px-3 py-4 min-[390px]:px-4 sm:px-6 sm:py-6">
       <PageHeader
         title={t('orders.title')}
         count={list.length}

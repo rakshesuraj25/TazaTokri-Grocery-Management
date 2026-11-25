@@ -96,9 +96,10 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title={t('nav.users')}
+        serif
         subtitle={t('staff.users.subtitle', {
           defaultValue: 'Register shop staff or delivery riders and view active delivery team accounts.',
         })}

@@ -26,7 +26,7 @@ export function ShopFeaturedCategories({
   return (
     <section aria-label={t('shop.featuredCategories', { defaultValue: 'Shop by category' })} className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-organic text-foreground text-[26px] font-normal sm:text-[32px]">
+        <h2 className="font-organic text-foreground text-[22px] font-normal sm:text-[28px]">
           {t('shop.featuredCategories', { defaultValue: 'Shop by category' })}
         </h2>
         {selectedCategory !== 'ALL' && (

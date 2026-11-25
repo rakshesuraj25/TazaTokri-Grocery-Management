@@ -66,7 +66,7 @@ export function StaffOrderCard({
   }
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="border-border space-y-3 rounded-2xl p-4 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">

@@ -96,42 +96,44 @@
   --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
-/* Scoped customer storefront palette & typography (leaves Admin/Staff/Owner/Delivery UIs untouched) */
-.storefront-theme {
-  --background: #F7F4EA;
-  --foreground: #1D2921;
+/* Scoped customer storefront, Owner/Admin & Delivery palette & typography (leaves Public UIs untouched) */
+.storefront-theme,
+.admin-theme,
+.delivery-theme {
+  --background: #FAF8F5;
+  --foreground: #22201E;
   --card: #FFFFFF;
-  --card-foreground: #1D2921;
+  --card-foreground: #22201E;
   --popover: #FFFFFF;
-  --popover-foreground: #1D2921;
-  --surface-subtle: #EFECE0;
-  --primary: #174C35;
+  --popover-foreground: #22201E;
+  --surface-subtle: #F3EDE3;
+  --primary: #2E6F40;
   --primary-foreground: #FFFFFF;
-  --deep-green: #6E9F48;
-  --sage: #EBF1E4;
-  --cream: #F7F4EA;
-  --secondary: #EBF1E4;
-  --secondary-foreground: #174C35;
-  --muted: #EAE4D3;
-  --muted-foreground: #4C554D;
-  --brand-muted: #737A70;
-  --accent: #EBF1E4;
-  --accent-foreground: #174C35;
-  --destructive: #C86B35;
+  --deep-green: #235832;
+  --sage: #E9F2EB;
+  --cream: #FAF8F5;
+  --secondary: #F3EDE3;
+  --secondary-foreground: #235832;
+  --muted: #EFE7DA;
+  --muted-foreground: #6A635B;
+  --brand-muted: #6A635B;
+  --accent: #E9F2EB;
+  --accent-foreground: #235832;
+  --destructive: #C86D3B;
   --destructive-foreground: #FFFFFF;
-  --tomato: #C86B35;
+  --tomato: #C86D3B;
   --tomato-light: #FAEDE5;
   --turmeric: #DDA15E;
   --turmeric-light: #F9EFE0;
   --turmeric-foreground: #4A2C0A;
-  --border: #E9E5DA;
-  --input: #DCD7CA;
-  --ring: #174C35;
-  --shadow-card: 0 3px 12px rgba(34, 44, 35, 0.04);
-  --shadow-floating: 0 8px 24px rgba(34, 44, 35, 0.08);
-  --font-sans: 'DM Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
-  --font-display: 'DM Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
-  --font-organic: 'DM Serif Display', 'Noto Sans Devanagari', Georgia, serif;
+  --border: #E6DFD3;
+  --input: #D8CFC0;
+  --ring: #2E6F40;
+  --shadow-card: 0 1px 2px rgba(34, 32, 30, 0.04), 0 6px 16px -6px rgba(34, 32, 30, 0.07);
+  --shadow-floating: 0 12px 28px -8px rgba(34, 32, 30, 0.14);
+  --font-sans: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-organic: 'Fraunces', 'Noto Sans Devanagari', Georgia, serif;
   font-family: var(--font-sans);
 }
 
@@ -356,4 +358,12 @@
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

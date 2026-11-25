@@ -78,6 +78,41 @@ describe('Final UI/UX Redesign — Collapsible Sidebar & Operational Views', () 
     })
 
     server.use(
+      http.get('*/api/suppliers/dashboard', () =>
+        HttpResponse.json({
+          totalSuppliers: 2,
+          activeSuppliers: 2,
+          totalPurchases: '1450.00',
+          totalPayments: '0.00',
+          totalOutstandingPayable: '1450.00',
+          suppliers: [
+            {
+              id: 1,
+              name: 'Deshmukh Farm',
+              type: 'FARMER',
+              phone: '9822112233',
+              active: true,
+              purchaseCount: 1,
+              totalPurchases: '1450.00',
+              totalPayments: '0.00',
+              outstandingPayable: '1450.00',
+              lastPurchaseDate: '2026-11-16',
+            },
+            {
+              id: 2,
+              name: 'Marketyard Wholesale',
+              type: 'WHOLESALE_MARKET',
+              phone: null,
+              active: true,
+              purchaseCount: 0,
+              totalPurchases: '0.00',
+              totalPayments: '0.00',
+              outstandingPayable: '0.00',
+              lastPurchaseDate: null,
+            },
+          ],
+        }),
+      ),
       http.get('*/api/suppliers', () =>
         HttpResponse.json([
           { id: 1, name: 'Deshmukh Farm', type: 'FARMER', phone: '9822112233', active: true },
@@ -115,10 +150,10 @@ describe('Final UI/UX Redesign — Collapsible Sidebar & Operational Views', () 
       expect(screen.getByText('Deshmukh Farm')).toBeInTheDocument()
     })
     expect(screen.getByText('Marketyard Wholesale')).toBeInTheDocument()
-    expect(screen.getByText('₹1,450.00')).toBeInTheDocument()
+    expect(screen.getAllByText('₹1,450.00').length).toBeGreaterThanOrEqual(1)
 
-    // Filter to Farmers via filter pill
-    fireEvent.click(screen.getByRole('button', { name: 'Farmer' }))
+    // Filter to Farmers via type select
+    fireEvent.change(screen.getByLabelText('Filter by type'), { target: { value: 'FARMER' } })
     expect(screen.getByText('Deshmukh Farm')).toBeInTheDocument()
     expect(screen.queryByText('Marketyard Wholesale')).not.toBeInTheDocument()
   })
