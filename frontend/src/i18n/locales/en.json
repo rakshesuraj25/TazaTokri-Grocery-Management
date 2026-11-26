@@ -499,7 +499,7 @@
   "delivery": {
     "title": "Deliveries",
     "noOrders": "No deliveries today",
-    "startDelivery": "Start",
+    "startDelivery": "Start Delivery",
     "deliver": "Delivered",
     "fail": "Failed",
     "failReason": "Failure reason (required)",

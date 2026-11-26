@@ -371,23 +371,32 @@ test.describe('TazaTokri Phase 4 End-to-End Workflows (Customer, Staff, Delivery
     await page.goto('/login')
     await page.getByLabel(/phone/i).fill('9123456789')
     await page.getByLabel(/^password$/i).fill('password123')
-    await page.getByRole('button', { name: /log in/i }).click()
+    await page.getByRole('button', { name: /^Log in$/i }).click()
 
     await expect(page).toHaveURL(/\/delivery/)
     await expect(page.getByText('Anita Deshmukh')).toBeVisible()
     await expect(page.getByText('Leave with security guard if unanswered')).toBeVisible()
 
-    // Start delivery
+      // Start delivery
     await page.getByRole('button', { name: /start delivery/i }).click()
-    await expect(page.getByRole('button', { name: /mark delivered/i })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: /^delivered$/i })
+    ).toBeVisible()
 
     // Open Deliver sheet
-    await page.getByRole('button', { name: /mark delivered/i }).click()
+    await page.getByRole('button', { name: /^delivered$/i }).click()
     await expect(page.getByTestId('delivery-otp-section')).toBeVisible()
 
-    // Issue OTP
-    await page.getByRole('button', { name: /Send \/ Issue 6-Digit OTP/i }).click()
+    // Expand optional customer OTP section
+    const otpSection = page.getByTestId('delivery-otp-section')
 
+    await expect(otpSection).toBeVisible()
+    await otpSection.locator('button').first().click()
+
+    // Issue OTP
+    await otpSection.getByRole('button', {
+      name: /Send 6-Digit OTP/i,
+    }).click()
     // Enter wrong OTP and verify rejection
     const otpInput = page.getByPlaceholder('6-digit OTP')
     await otpInput.fill('111111')
