@@ -102,6 +102,7 @@ export function ShopHero({ featuredVegetables = [] }: ShopHeroProps) {
                 src="/hero-produce.jpg"
                 alt={t('shop.editorialHeroTitle', { defaultValue: 'Freshness for every home.' })}
                 loading="eager"
+                fetchPriority="high"
                 decoding="async"
                 onError={() => setHeroImgFailed(true)}
                 className="h-full w-full object-cover object-center"

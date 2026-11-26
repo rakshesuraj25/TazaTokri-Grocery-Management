@@ -21,7 +21,7 @@ import { buildUsualVegetables } from '@/features/orders/orderAgain'
 import { useVegetableName } from '@/hooks/useVegetableName'
 import { usePublicStoreSettings } from '@/features/settings/hooks'
 import { estimateDeliveryFee } from '@/lib/businessRules'
-import { addMoney, mulMoney, sumMoney } from '@/lib/money'
+import { addMoney, formatMoney, mulMoney, subMoney, sumMoney } from '@/lib/money'
 import { usePublicVegetables } from '../hooks'
 import { useFavouritesStore } from '../favouritesStore'
 import {
@@ -179,6 +179,59 @@ export default function ShopPage() {
         </div>
       )}
 
+      <div
+        data-testid="shop-delivery-strip"
+        className="bg-secondary/80 border-border/80 text-foreground flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-[13px] font-medium"
+      >
+        <span>
+          {t('shop.deliveryStripSummary', {
+            min: formatMoney(settings.minOrder),
+            free: formatMoney(settings.freeDeliveryAbove),
+            fee: formatMoney(settings.deliveryFee),
+            defaultValue: `Min order ${formatMoney(settings.minOrder)} • Free delivery ≥ ${formatMoney(settings.freeDeliveryAbove)} (${formatMoney(settings.deliveryFee)} fee below)`,
+          })}
+        </span>
+      </div>
+
+      <ShopToolbar
+        search={search}
+        onSearchChange={setSearch}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        category={category}
+        onCategoryChange={setCategory}
+        inStockOnly={inStockOnly}
+        onInStockOnlyChange={setInStockOnly}
+        categories={categories}
+        favouritesCount={favouriteIds.length}
+      />
+
+      {usualVegetables.length > 0 && category === 'ALL' && !search.trim() && (
+        <section className="space-y-3" data-testid="shop-your-usual-section">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionHeader
+              title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
+              count={usualVegetables.length}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddAllUsuals}
+              className="rounded-[10px]"
+            >
+              <Plus className="size-3.5" aria-hidden />
+              {t('shop.addAllUsuals', { defaultValue: 'Add all usuals' })}
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
+            {usualVegetables.map((veg, idx) => (
+              <VegetableCard key={`usual-${veg.id}`} vegetable={veg} priority={idx < 4} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <ShopHero featuredVegetables={catalog.data ?? []} />
 
       {Boolean(user) && category === 'ALL' && !search.trim() && (
@@ -211,45 +264,6 @@ export default function ShopPage() {
           )}
         </div>
 
-        <ShopToolbar
-          search={search}
-          onSearchChange={setSearch}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          category={category}
-          onCategoryChange={setCategory}
-          inStockOnly={inStockOnly}
-          onInStockOnlyChange={setInStockOnly}
-          categories={categories}
-          favouritesCount={favouriteIds.length}
-        />
-
-        {usualVegetables.length > 0 && category === 'ALL' && !search.trim() && (
-          <section className="space-y-3" data-testid="shop-your-usual-section">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <SectionHeader
-                title={t('shop.yourUsual', { defaultValue: 'Your usual' })}
-                count={usualVegetables.length}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddAllUsuals}
-                className="rounded-[10px]"
-              >
-                <Plus className="size-3.5" aria-hidden />
-                {t('shop.addAllUsuals', { defaultValue: 'Add all usuals' })}
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
-              {usualVegetables.map((veg) => (
-                <VegetableCard key={`usual-${veg.id}`} vegetable={veg} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {catalog.isPending || catalog.isLoading ? (
           <ProductGridSkeleton count={8} />
         ) : catalog.isError ? (
@@ -278,8 +292,8 @@ export default function ShopPage() {
             id="shop-catalog"
             className="grid grid-cols-2 gap-2.5 min-[390px]:gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5"
           >
-            {filtered.map((veg) => (
-              <VegetableCard key={veg.id} vegetable={veg} />
+            {filtered.map((veg, idx) => (
+              <VegetableCard key={veg.id} vegetable={veg} priority={idx < 4} />
             ))}
           </div>
         )}
@@ -287,23 +301,38 @@ export default function ShopPage() {
 
       <ShopTrustFooter />
 
-      {/* Mobile sticky cart summary bar */}
+      {/* Mobile sticky cart summary bar with free-delivery progress */}
       {(totalCartLines > 0 || prunedNames.length > 0) && (
         <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-xl px-4 lg:hidden">
-          <Button
-            size="xl"
-            className="bg-primary hover:bg-[#245C42] flex w-full items-center justify-between rounded-[12px] shadow-lg"
-            onClick={() => setCartOpen(true)}
-          >
-            <span className="inline-flex items-center gap-2">
-              <ShoppingBag className="size-5" aria-hidden />
-              {t('shop.viewCart')} ({totalCartLines})
-            </span>
-            <EstimatedAmount
-              value={subtotal.gt(0) ? estimatedTotal.toFixed(2) : '0.00'}
-              className="font-display text-base font-extrabold"
-            />
-          </Button>
+          <div className="bg-primary text-primary-foreground rounded-[12px] p-2 shadow-lg">
+            {subtotal.gt(0) && (
+              <p className="px-2 pb-1 text-[11px] font-medium text-white/90">
+                {subtotal.lt(settings.minOrder)
+                  ? t('shop.minOrderHint', {
+                      amount: formatMoney(subMoney(settings.minOrder, subtotal)),
+                    })
+                  : subtotal.lt(settings.freeDeliveryAbove)
+                    ? t('shop.freeDeliveryHint', {
+                        amount: formatMoney(subMoney(settings.freeDeliveryAbove, subtotal)),
+                      })
+                    : t('shop.freeDeliveryMet')}
+              </p>
+            )}
+            <Button
+              size="lg"
+              className="bg-primary hover:bg-[#245C42] flex w-full items-center justify-between rounded-[10px] px-3"
+              onClick={() => setCartOpen(true)}
+            >
+              <span className="inline-flex items-center gap-2">
+                <ShoppingBag className="size-5" aria-hidden />
+                {t('shop.viewCart')} ({totalCartLines})
+              </span>
+              <EstimatedAmount
+                value={subtotal.gt(0) ? estimatedTotal.toFixed(2) : '0.00'}
+                className="font-display text-base font-extrabold text-white [&_*]:text-white/90"
+              />
+            </Button>
+          </div>
         </div>
       )}
 

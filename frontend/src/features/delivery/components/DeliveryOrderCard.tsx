@@ -20,6 +20,7 @@ import type { DeliveryOrder } from '../types'
 interface DeliveryOrderCardProps {
   order: DeliveryOrder
   startPending: boolean
+  disabledOffline?: boolean
   onStart: (orderId: string | number) => void
   onDeliver: (order: DeliveryOrder) => void
   onFail: (order: DeliveryOrder) => void
@@ -28,6 +29,7 @@ interface DeliveryOrderCardProps {
 export function DeliveryOrderCard({
   order,
   startPending,
+  disabledOffline = false,
   onStart,
   onDeliver,
   onFail,
@@ -91,8 +93,8 @@ export function DeliveryOrderCard({
             {order.address} — {order.pincode}
           </p>
           {order.deliveryInstructions && (
-            <p className="bg-surface-subtle text-foreground mt-1.5 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium">
-              <MessageSquareText className="text-primary mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <p className="bg-surface-subtle text-foreground mt-1.5 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium">
+              <MessageSquareText className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
               <span>{order.deliveryInstructions}</span>
             </p>
           )}
@@ -100,7 +102,7 @@ export function DeliveryOrderCard({
 
         {hasDue ? (
           <div className="bg-turmeric-light text-turmeric-foreground shrink-0 rounded-2xl px-3 py-1.5 text-right">
-            <span className="block text-xs font-semibold">
+            <span className="block text-sm font-semibold">
               {t('delivery.collectAmount')}
             </span>
             <MoneyDisplay
@@ -117,7 +119,7 @@ export function DeliveryOrderCard({
         )}
       </div>
 
-      <ul className="border-border/70 grid gap-2.5 border-t pt-3 text-xs sm:grid-cols-2">
+      <ul className="border-border/70 grid gap-2.5 border-t pt-3 text-sm sm:grid-cols-2">
         {order.items.map((line, i) => (
           <li key={i} className="flex items-center gap-2.5 font-medium">
             <VegetableImage nameEn={line.vegetable} size="xs" />
@@ -157,6 +159,7 @@ export function DeliveryOrderCard({
         <Button
           size="xl"
           className="w-full rounded-2xl"
+          disabled={disabledOffline}
           loading={startPending}
           onClick={() => onStart(order.orderId)}
         >
@@ -167,18 +170,26 @@ export function DeliveryOrderCard({
 
       {order.deliveryStatus === 'OUT_FOR_DELIVERY' && (
         <div className="grid grid-cols-2 gap-2">
-          <Button size="xl" onClick={() => onDeliver(order)} className="rounded-2xl">
-            <CheckCircle2 className="size-5" />
-            {t('delivery.deliver')}
+          <Button
+            size="xl"
+            disabled={disabledOffline}
+            onClick={() => onDeliver(order)}
+            className="rounded-2xl px-3 text-base sm:px-6 sm:text-lg"
+          >
+            <CheckCircle2 className="size-5 shrink-0" />
+            <span className="truncate">{t('delivery.deliver')}</span>
           </Button>
           <Button
             variant="destructive"
             size="xl"
+            disabled={disabledOffline}
             onClick={() => onFail(order)}
-            className="rounded-2xl"
+            className="rounded-2xl px-3 text-base sm:px-6 sm:text-lg"
           >
-            <XCircle className="size-5" />
-            {t('delivery.unableToDeliver', { defaultValue: 'Unable to Deliver' })}
+            <XCircle className="size-5 shrink-0" />
+            <span className="truncate">
+              {t('delivery.unableToDeliver', { defaultValue: 'Unable to Deliver' })}
+            </span>
           </Button>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FilePlus2, History, Receipt, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,10 +23,26 @@ export default function QuickSalePage() {
   const ctrl = useQuickSaleController()
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && ctrl.syncedLines.length > 0) {
+        e.preventDefault()
+        if (window.matchMedia('(max-width: 1023px)').matches) {
+          ctrl.setMobileSheetOpen(true)
+        } else {
+          document.querySelector<HTMLButtonElement>('[data-testid="quick-sale-submit"]')?.focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [ctrl])
+
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 pb-28 lg:pb-6">
+    <div className="mx-auto max-w-7xl space-y-4 px-3.5 py-4 pb-28 sm:px-6 lg:pb-6">
       <Tabs defaultValue="pos" className="space-y-4">
         <PageHeader
+          serif
           title={t('staff.sale.title')}
           actions={
             <>

@@ -16,9 +16,10 @@ import type { PublicUnitOption, PublicVegetable } from '../types'
 
 interface VegetableCardProps {
   vegetable: PublicVegetable
+  priority?: boolean
 }
 
-export function VegetableCard({ vegetable }: VegetableCardProps) {
+export function VegetableCard({ vegetable, priority = false }: VegetableCardProps) {
   const { t } = useTranslation()
   const { name, subtitle } = useVegetableName()
   const sortedOptions = useMemo(
@@ -111,7 +112,8 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             category={vegetable.category}
             alt={name(vegetable)}
             size="card"
-            className="rounded-none border-0 transition-transform duration-200 ease-out group-hover:scale-[1.03]"
+            priority={priority}
+            className="rounded-none border-0 transition-transform duration-200 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />
           <button
             type="button"
@@ -141,11 +143,11 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
 
         <div className="space-y-2.5 p-2.5 pb-2 min-[390px]:p-3.5 min-[390px]:pb-2.5 sm:space-y-3 sm:p-4 sm:pb-3">
           <div className="space-y-0.5">
-            <h3 className="text-foreground break-words text-[15px] leading-snug font-semibold sm:text-[16px]">
+            <h3 className="text-foreground line-clamp-2 min-h-[2.6em] break-words text-[15px] leading-snug font-semibold sm:text-[16px]">
               {name(vegetable)}
             </h3>
             {subtitle(vegetable) && (
-              <p className="text-brand-muted break-words text-[12px] font-medium">
+              <p className="text-brand-muted line-clamp-1 break-words text-[13px] leading-snug font-medium">
                 {subtitle(vegetable)}
               </p>
             )}
@@ -169,7 +171,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
                   aria-checked={active}
                   disabled={optExceedsTotalStock}
                   onClick={() => setSelectedUnitId(opt.unitId)}
-                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
+                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-[8px] border px-2.5 py-1.5 text-[13px] leading-snug font-semibold whitespace-nowrap transition-colors duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-45 ${
                     active
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-secondary/60 text-secondary-foreground hover:bg-secondary'
@@ -198,23 +200,23 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             price={selectedUnit?.price ?? vegetable.pricePerUnit}
             unitLabel={selectedUnit?.label ?? unitLabel}
             size="lg"
-            className="[&>span:first-child]:text-[16px] sm:[&>span:first-child]:text-[18px]"
+            className="[&>span:first-child]:text-[18px] sm:[&>span:first-child]:text-[19px]"
           />
         </div>
 
         {!vegetable.inStock || !hasPrice ? (
           <StatusBadge kind="stock" status="OUT_OF_STOCK" />
         ) : inCart ? (
-          <div className="border-primary/20 bg-accent flex h-9 shrink-0 items-center justify-between rounded-[9px] border px-1 sm:h-10 sm:w-[104px] sm:rounded-[10px]" aria-live="polite">
+          <div className="border-primary/20 bg-accent flex min-h-11 shrink-0 items-center justify-between rounded-[10px] border px-0.5 sm:w-[120px]" aria-live="polite">
             <button
               type="button"
               onClick={() =>
                 updateCount(String(vegetable.id), String(selectedUnit!.unitId), inCart.count - 1)
               }
               aria-label={t('common.decrease', { defaultValue: 'Decrease' })}
-              className="text-primary hover:bg-card inline-flex size-7 items-center justify-center rounded-[7px] transition-colors duration-150 sm:size-8"
+              className="text-primary hover:bg-card inline-flex size-11 items-center justify-center rounded-[8px] transition-transform duration-150 active:scale-95 motion-reduce:transition-none motion-reduce:transform-none sm:size-10"
             >
-              <Minus className="size-3.5" aria-hidden />
+              <Minus className="size-4" aria-hidden />
             </button>
             <span className="money-num text-foreground w-6 text-center text-sm font-bold">{inCart.count}</span>
             <button
@@ -226,9 +228,9 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
                 }
               }}
               aria-label={t('common.increase', { defaultValue: 'Increase' })}
-              className="bg-primary text-primary-foreground hover:bg-deep-green inline-flex size-7 items-center justify-center rounded-[7px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 sm:size-8"
+              className="bg-primary text-primary-foreground hover:bg-deep-green inline-flex size-11 items-center justify-center rounded-[8px] transition-transform duration-150 active:scale-95 motion-reduce:transition-none motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-45 sm:size-10"
             >
-              <Plus className="size-3.5" aria-hidden />
+              <Plus className="size-4" aria-hidden />
             </button>
           </div>
         ) : (
@@ -236,7 +238,7 @@ export function VegetableCard({ vegetable }: VegetableCardProps) {
             size="sm"
             disabled={!canAddSelected}
             onClick={handleAdd}
-            className="bg-primary hover:bg-deep-green h-9 shrink-0 rounded-[9px] px-3.5 text-[13px] font-semibold sm:h-10 sm:rounded-[10px] sm:px-4 sm:text-[14px]"
+            className="bg-primary hover:bg-deep-green min-h-11 shrink-0 rounded-[10px] px-3.5 text-[13px] font-semibold transition-transform duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none sm:h-10 sm:min-h-10 sm:px-4 sm:text-[14px]"
           >
             <ShoppingBasket className="size-4 shrink-0" aria-hidden />
             <span>{t('shop.addToCart')}</span>

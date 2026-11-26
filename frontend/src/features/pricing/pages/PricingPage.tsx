@@ -18,6 +18,9 @@ import { useStaffCatalog } from '@/features/catalog/hooks'
 import { ProductsTabs } from '@/features/catalog/components/ProductsTabs'
 import { matchesVegetableSearch } from '@/features/catalog/shopHelpers'
 import type { StaffCatalogItem } from '@/features/catalog/types'
+import { toast } from 'sonner'
+import { toApiError } from '@/lib/api'
+import { useSetPrice } from '../hooks'
 import {
   PriceHistorySheet,
   PriceSuggestionDialog,
@@ -32,6 +35,9 @@ export default function PricingPage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<string>('ALL')
   const [view, setView] = useState<'cards' | 'table'>('cards')
+  const [denseTable, setDenseTable] = useState(false)
+  const [inlineDrafts, setInlineDrafts] = useState<Record<string, string>>({})
+  const setPrice = useSetPrice()
   const [editTarget, setEditTarget] = useState<StaffCatalogItem | null>(null)
   const [suggestTarget, setSuggestTarget] = useState<StaffCatalogItem | null>(null)
   const [historyTarget, setHistoryTarget] = useState<StaffCatalogItem | null>(null)
@@ -58,8 +64,9 @@ export default function PricingPage() {
   }, [catalog.data])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-5">
+    <div className="mx-auto max-w-6xl space-y-5 px-3.5 py-4 sm:px-6 sm:py-6">
       <PageHeader
+        serif
         title={t('staff.pricing.title')}
         count={catalog.data?.length}
         breadcrumbs={[
@@ -90,6 +97,17 @@ export default function PricingPage() {
                 {t('common.tableView', { defaultValue: 'Table' })}
               </Button>
             </div>
+            {view === 'table' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setDenseTable((v) => !v)}
+              >
+                {denseTable ? 'Comfortable' : 'Compact'}
+              </Button>
+            )}
             <Button variant="outline" size="sm" asChild className="rounded-full">
               <Link to="/display/prices">
                 <Monitor className="size-4" />
@@ -236,16 +254,72 @@ export default function PricingPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
-                      {item.pricePerUnit !== null ? (
-                        <span className="font-display font-bold">
-                          <MoneyDisplay value={item.pricePerUnit} /> / {unitLabel}
-                        </span>
-                      ) : (
-                        <StatusBadge kind="price" status="NOT_SET" />
-                      )}
+                    <td className={`px-3 ${denseTable ? 'py-1.5' : 'py-2.5'}`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.pricePerUnit !== null ? (
+                          <span className="font-display font-bold">
+                            <MoneyDisplay value={item.pricePerUnit} /> / {unitLabel}
+                          </span>
+                        ) : (
+                          <StatusBadge kind="price" status="NOT_SET" />
+                        )}
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            aria-label={`Inline price for ${name(item)}`}
+                            placeholder={item.pricePerUnit !== null ? String(item.pricePerUnit) : '0.00'}
+                            value={inlineDrafts[String(item.id)] ?? ''}
+                            onChange={(e) =>
+                              setInlineDrafts((prev) => ({
+                                ...prev,
+                                [String(item.id)]: e.target.value,
+                              }))
+                            }
+                            className="h-8 w-24 text-xs"
+                          />
+                          {inlineDrafts[String(item.id)] !== undefined &&
+                            inlineDrafts[String(item.id)] !== '' && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 px-2.5 text-xs"
+                                disabled={setPrice.isPending}
+                                onClick={() => {
+                                  const raw = (inlineDrafts[String(item.id)] ?? '').trim()
+                                  const num = Number(raw)
+                                  if (!Number.isFinite(num) || num <= 0) {
+                                    toast.error(
+                                      t('pricing.invalidPrice', {
+                                        defaultValue: 'Enter a valid price greater than 0',
+                                      }),
+                                    )
+                                    return
+                                  }
+                                  setPrice.mutate(
+                                    { vegId: item.id, body: { pricePerUnit: num.toFixed(2) } },
+                                    {
+                                      onSuccess: () => {
+                                        toast.success(`${name(item)} updated`)
+                                        setInlineDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[String(item.id)]
+                                          return next
+                                        })
+                                      },
+                                      onError: (err) => toast.error(toApiError(err).message),
+                                    },
+                                  )
+                                }}
+                              >
+                                {t('common.save', { defaultValue: 'Save' })}
+                              </Button>
+                            )}
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className={`px-3 text-right ${denseTable ? 'py-1.5' : 'py-2.5'}`}>
                       <div className="inline-flex gap-1">
                         <Button size="sm" onClick={() => setEditTarget(item)}>
                           {t('staff.pricing.setPrice')}

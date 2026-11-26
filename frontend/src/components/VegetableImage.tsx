@@ -83,6 +83,7 @@ export function VegetableImage({
           width={intrinsicSize}
           height={intrinsicSize}
           loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
           onLoad={() => onStatusChange?.('photo')}
           onError={() => {

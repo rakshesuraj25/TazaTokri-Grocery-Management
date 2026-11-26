@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, RefreshCw, Truck } from 'lucide-react'
+import { CheckCircle2, MapPin, Phone, RefreshCw, Truck, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -20,7 +20,21 @@ export default function DeliveryOrdersPage() {
 
   const [deliverTarget, setDeliverTarget] = useState<DeliveryOrder | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryOrder | null>(null)
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+  )
   const touchStartY = useRef<number | null>(null)
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
 
   if (orders.isPending || orders.isLoading) {
     return (
@@ -66,12 +80,53 @@ export default function DeliveryOrdersPage() {
     }
   }
 
+  const activeOrder = list.find((o) => o.deliveryStatus === 'OUT_FOR_DELIVERY') ?? null
+  const activePhone = (activeOrder?.customerPhone ?? '').replace(/[^\d+]/g, '')
+  const activeMapsUrl = activeOrder
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        [activeOrder.address, activeOrder.pincode].filter(Boolean).join(', '),
+      )}`
+    : ''
+
   return (
     <div
-      className="space-y-4"
+      className={`space-y-4 ${activeOrder ? 'pb-24 sm:pb-4' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {!isOnline && (
+        <div
+          role="alert"
+          className="bg-destructive/10 border-destructive/30 text-destructive flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold"
+        >
+          <WifiOff className="size-4 shrink-0" aria-hidden />
+          <span>
+            {t('delivery.offlineNotice', {
+              defaultValue: 'You are offline. Status updates are paused until connection returns.',
+            })}
+          </span>
+        </div>
+      )}
+      {orders.isStale && isOnline && orders.dataUpdatedAt > 0 && (
+        <div className="bg-secondary/70 border-border text-muted-foreground flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-xs">
+          <span>
+            {t('delivery.lastSynced', {
+              time: new Date(orders.dataUpdatedAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              defaultValue: `Last synced at ${new Date(orders.dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+            })}
+          </span>
+          <button
+            type="button"
+            onClick={() => void orders.refetch()}
+            className="text-primary font-semibold underline-offset-2 hover:underline"
+          >
+            {t('common.refresh', { defaultValue: 'Refresh' })}
+          </button>
+        </div>
+      )}
       <PageHeader
         serif
         title={t('delivery.title')}
@@ -127,6 +182,7 @@ export default function DeliveryOrdersPage() {
           key={String(order.orderId)}
           order={order}
           startPending={startDelivery.isPending}
+          disabledOffline={!isOnline}
           onStart={(id) =>
             startDelivery.mutate(id, {
               onError: (err) => toast.error(toApiError(err).message),
@@ -136,6 +192,42 @@ export default function DeliveryOrdersPage() {
           onFail={setFailTarget}
         />
       ))}
+
+      {activeOrder && (
+        <div
+          data-testid="delivery-active-thumb-bar"
+          className="bg-card/95 border-border fixed inset-x-0 bottom-0 z-30 border-t px-3.5 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:hidden"
+        >
+          <div className="mx-auto flex max-w-2xl items-center gap-2">
+            {activePhone && (
+              <Button asChild variant="outline" size="lg" className="min-h-12 rounded-xl px-3">
+                <a href={`tel:${activePhone}`} aria-label={t('delivery.callCustomer')}>
+                  <Phone className="size-4" />
+                </a>
+              </Button>
+            )}
+            <Button asChild variant="outline" size="lg" className="min-h-12 rounded-xl px-3">
+              <a
+                href={activeMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t('delivery.openMaps')}
+              >
+                <MapPin className="size-4" />
+              </a>
+            </Button>
+            <Button
+              size="lg"
+              disabled={!isOnline}
+              onClick={() => setDeliverTarget(activeOrder)}
+              className="min-h-12 flex-1 rounded-xl font-semibold"
+            >
+              <CheckCircle2 className="size-4" />
+              #{activeOrder.orderId} · {t('delivery.deliver')}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <DeliverOrderDialog order={deliverTarget} onClose={() => setDeliverTarget(null)} />
       <FailOrderDialog order={failTarget} onClose={() => setFailTarget(null)} />

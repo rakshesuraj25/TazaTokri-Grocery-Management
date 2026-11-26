@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Banknote, Calculator, Minus, Plus, QrCode, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -5,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { EstimatedAmount, MoneyDisplay } from '@/components/MoneyDisplay'
 import { VegetableImage } from '@/components/VegetableImage'
 import { useVegetableName } from '@/hooks/useVegetableName'
-import { addMoney, dec, formatQty, mulMoney, sumMoney, toApiQty } from '@/lib/money'
+import { addMoney, dec, formatMoney, formatQty, mulMoney, subMoney, sumMoney, toApiQty } from '@/lib/money'
 import type { StaffCatalogItem } from '@/features/catalog/types'
 import { buildUpiString } from '../quickSaleHelpers'
 import type { SalePaymentMethod } from '../types'
@@ -43,6 +44,7 @@ export function QuickSaleBill({
 }: QuickSaleBillProps) {
   const { t } = useTranslation()
   const { name } = useVegetableName()
+  const [cashTendered, setCashTendered] = useState<number | null>(null)
 
   // Display-only estimate (server prices the real sale on submit)
   const estimatedTotal = sumMoney(
@@ -247,6 +249,47 @@ export function QuickSaleBill({
         </div>
       )}
 
+      {paymentMethod === 'CASH' && estimatedTotal.gt(0) && (
+        <div className="bg-surface-subtle/80 border-border/80 space-y-2 rounded-xl border p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <span className="text-muted-foreground font-semibold">
+              {t('staff.sale.quickTender', { defaultValue: 'Quick cash tender' })}
+            </span>
+            {cashTendered !== null && dec(cashTendered).gte(estimatedTotal) && (
+              <span className="text-primary font-bold">
+                {t('staff.sale.changeDue', { defaultValue: 'Change' })}:{' '}
+                {formatMoney(subMoney(cashTendered, estimatedTotal))}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCashTendered(estimatedTotal.toNumber())}
+              className="border-border bg-card hover:bg-secondary min-h-8 rounded-lg border px-2.5 font-semibold"
+            >
+              Exact
+            </button>
+            {[100, 200, 500, 1000]
+              .filter((amt) => dec(amt).gte(estimatedTotal))
+              .map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setCashTendered(amt)}
+                  className={`min-h-8 rounded-lg border px-2.5 font-semibold ${
+                    cashTendered === amt
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card hover:bg-secondary'
+                  }`}
+                >
+                  ₹{amt}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Live estimated total + submit */}
       <div
         aria-live="polite"
@@ -260,6 +303,7 @@ export function QuickSaleBill({
       </div>
 
       <Button
+        data-testid="quick-sale-submit"
         type="button"
         size="xl"
         className="w-full"
