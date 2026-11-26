@@ -2,9 +2,9 @@ name: TazaTokri Full-Stack CI
 
 on:
   push:
-    branches: [main]
+    branches: [qa-tidb]
   pull_request:
-    branches: [main]
+    branches: [qa-tidb]
 
 jobs:
   frontend:

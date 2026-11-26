@@ -13,9 +13,12 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2447,13 +2450,20 @@ class TazatokriBackendApplicationTests {
         assertEquals(new BigDecimal("40.000"), inventoryService.currentStock(103L));
         assertEquals(new BigDecimal("30.000"), inventoryService.currentStock(104L));
 
-        // Delivery Rules: min-order=150, fee=30, free-above=300, cutoff=18:00
+        // Delivery Rules: min-order=150, fee=30, free-above=300, cutoff=18:00 (Asia/Kolkata)
+        ZoneId ist = ZoneId.of("Asia/Kolkata");
+        LocalDate scenarioDate = LocalDate.of(2026, 11, 26);
+        Clock beforeCutoffClock = Clock.fixed(
+                ZonedDateTime.of(scenarioDate, LocalTime.of(10, 0), ist).toInstant(),
+                ist);
         DeliveryRules deliveryRules = new DeliveryRules(
                 List.of("411026", "411039"),
                 new BigDecimal("150.00"),
                 new BigDecimal("30.00"),
                 new BigDecimal("300.00"),
-                "18:00"
+                "18:00",
+                null,
+                beforeCutoffClock
         );
 
         List<CustomerOrder> orderStore = new ArrayList<>();
@@ -2483,7 +2493,7 @@ class TazatokriBackendApplicationTests {
         });
 
         OrderService orderService = new OrderService(
-                orderRepo, userRepo, addressRepo, vegRepo, priceRepo, inventoryService, deliveryRules);
+                orderRepo, userRepo, addressRepo, vegRepo, priceRepo, inventoryService, deliveryRules, null, beforeCutoffClock);
 
         // --- 2. CUSTOMER ORDERS SIMULATION ---
 
@@ -2505,7 +2515,7 @@ class TazatokriBackendApplicationTests {
         assertEquals(new BigDecimal("150.00"), orderB.subtotal());
         assertEquals(new BigDecimal("30.00"), orderB.deliveryFee());
         assertEquals(new BigDecimal("180.00"), orderB.estimatedTotal());
-        assertEquals(LocalDate.now(), orderB.deliveryDate());
+        assertEquals(scenarioDate, orderB.deliveryDate());
         assertEquals(new BigDecimal("48.000"), inventoryService.currentStock(101L));
 
         // C. Order near Rs 300 threshold (₹270) -> Cancelled before packing, stock restored
@@ -2542,9 +2552,9 @@ class TazatokriBackendApplicationTests {
         assertEquals(BigDecimal.ZERO, orderD.deliveryFee(), "Delivery fee must be 0 for orders >= Rs 300");
         assertEquals(new BigDecimal("300.00"), orderD.estimatedTotal());
 
-        // E. Order above Rs 300 placed after 18:00 cutoff -> Next-day delivery
-        LocalDateTime afterCutoffTime = LocalDateTime.of(LocalDate.now(), LocalTime.of(18, 30));
-        assertEquals(LocalDate.now().plusDays(1), deliveryRules.deliveryDateFor(afterCutoffTime));
+        // E. Order above Rs 300 placed after 18:00 IST cutoff -> Next-day delivery
+        LocalDateTime afterCutoffTime = LocalDateTime.of(scenarioDate, LocalTime.of(18, 30));
+        assertEquals(scenarioDate.plusDays(1), deliveryRules.deliveryDateFor(afterCutoffTime));
 
         // F. Overselling attempt (100kg Tomato when only 43kg remaining) -> Rejected
         assertThrows(InsufficientStockException.class, () -> orderService.place(
