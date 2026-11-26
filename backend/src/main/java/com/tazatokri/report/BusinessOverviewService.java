@@ -258,8 +258,7 @@ public class BusinessOverviewService {
                     "/staff/orders/" + o.getId()));
         }
 
-        List<Purchase> recentPurchases = purchases
-                .findAllByOrderByPurchaseDateDescIdDesc(PageRequest.of(0, 3)).getContent();
+        List<Purchase> recentPurchases = purchases.findTop3ByOrderByPurchaseDateDescIdDesc();
         for (Purchase p : recentPurchases) {
             items.add(new RecentActivityItem(
                     "PURCHASE",

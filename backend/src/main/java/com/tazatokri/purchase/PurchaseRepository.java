@@ -23,6 +23,9 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     @EntityGraph(attributePaths = {"supplier", "items", "items.vegetable"})
     Page<Purchase> findAllByOrderByPurchaseDateDescIdDesc(Pageable pageable);
 
+    @EntityGraph(attributePaths = {"supplier"})
+    List<Purchase> findTop3ByOrderByPurchaseDateDescIdDesc();
+
     @EntityGraph(attributePaths = {"supplier", "items", "items.vegetable"})
     List<Purchase> findBySupplierIdOrderByPurchaseDateDescIdDesc(Long supplierId);
 

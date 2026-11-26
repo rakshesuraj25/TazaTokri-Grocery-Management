@@ -29,8 +29,11 @@ import com.tazatokri.order.CustomerOrderRepository;
 import com.tazatokri.order.OrderStatus;
 import com.tazatokri.payment.PaymentMethod;
 import com.tazatokri.payment.PaymentRepository;
+import com.tazatokri.purchase.Purchase;
 import com.tazatokri.purchase.PurchaseItemRepository;
 import com.tazatokri.purchase.PurchaseRepository;
+import com.tazatokri.purchase.PurchaseStatus;
+import com.tazatokri.purchase.Supplier;
 import com.tazatokri.purchase.SupplierPaymentRepository;
 import com.tazatokri.purchase.SupplierRepository;
 import com.tazatokri.purchase.SupplierService;
@@ -134,7 +137,7 @@ class BusinessOverviewTests {
 
         PurchaseRepository purchaseRepo = proxy(PurchaseRepository.class, (p, m, a) -> switch (m.getName()) {
             case "totalSpendBetween" -> BigDecimal.ZERO;
-            case "findAllByOrderByPurchaseDateDescIdDesc" -> new PageImpl<>(List.of());
+            case "findTop3ByOrderByPurchaseDateDescIdDesc" -> List.of();
             case "summarizeAllSupplierPurchases" -> List.of(new PurchaseRepository.SupplierPurchaseProjection() {
                 @Override public Long getSupplierId() { return 1L; }
                 @Override public long getPurchaseCount() { return 2L; }
@@ -247,7 +250,7 @@ class BusinessOverviewTests {
         });
         PurchaseRepository purchaseRepo = proxy(PurchaseRepository.class, (p, m, a) -> switch (m.getName()) {
             case "totalSpendBetween" -> BigDecimal.ZERO;
-            case "findAllByOrderByPurchaseDateDescIdDesc" -> new PageImpl<>(List.of());
+            case "findTop3ByOrderByPurchaseDateDescIdDesc" -> List.of();
             default -> List.of();
         });
         SupplierPaymentRepository supplierPayRepo = proxy(SupplierPaymentRepository.class, (p, m, a) -> switch (m.getName()) {
@@ -271,6 +274,76 @@ class BusinessOverviewTests {
         BusinessOverviewService.BusinessOverviewResponse res = service.overview();
         assertNull(res.kpis().salesChangePercent());
         assertTrue(res.topSellingToday().isEmpty());
+    }
+
+    @Test
+    void overviewLoadsRecentPurchasesViaLightweightSupplierGraphWithoutPaginatedCollectionFetch() throws Exception {
+        Method top3Method = PurchaseRepository.class.getMethod("findTop3ByOrderByPurchaseDateDescIdDesc");
+        org.springframework.data.jpa.repository.EntityGraph top3Graph =
+                top3Method.getAnnotation(org.springframework.data.jpa.repository.EntityGraph.class);
+        assertNotNull(top3Graph);
+        assertEquals(List.of("supplier"), List.of(top3Graph.attributePaths()));
+
+        Method pagedMethod = PurchaseRepository.class.getMethod(
+                "findAllByOrderByPurchaseDateDescIdDesc", org.springframework.data.domain.Pageable.class);
+        assertNotNull(pagedMethod);
+
+        Supplier supplier = new Supplier();
+        supplier.setId(7L);
+        supplier.setName("Sahyadri Farms");
+
+        Purchase p1 = new Purchase();
+        p1.setId(42L);
+        p1.setSupplier(supplier);
+        p1.setPurchaseDate(LocalDate.of(2026, 11, 21));
+        p1.setStatus(PurchaseStatus.COMPLETED);
+        p1.setTotalCost(new BigDecimal("1250.5"));
+        p1.setCreatedAt(LocalDateTime.of(2026, 11, 21, 9, 30));
+
+        SaleRepository saleRepo = proxy(SaleRepository.class, (p, m, a) -> switch (m.getName()) {
+            case "summarizeByPayment", "summarizeDailySalesBetween" -> List.of();
+            case "totalItemsSoldBetween" -> BigDecimal.ZERO;
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        SaleItemRepository saleItemRepo = proxy(SaleItemRepository.class, (p, m, a) -> List.of());
+        CustomerOrderRepository orderRepo = proxy(CustomerOrderRepository.class, (p, m, a) -> List.of());
+        PaymentRepository paymentRepo = proxy(PaymentRepository.class, (p, m, a) -> switch (m.getName()) {
+            case "sumCashSettledBetween", "sumPendingCashTotal", "sumSuccessfulRefundsByMethodBetween" -> BigDecimal.ZERO;
+            default -> List.of();
+        });
+        PurchaseRepository purchaseRepo = proxy(PurchaseRepository.class, (p, m, a) -> switch (m.getName()) {
+            case "totalSpendBetween" -> BigDecimal.ZERO;
+            case "findTop3ByOrderByPurchaseDateDescIdDesc" -> List.of(p1);
+            case "findAllByOrderByPurchaseDateDescIdDesc" ->
+                    throw new AssertionError("Dashboard overview must not call paginated collection fetch");
+            default -> List.of();
+        });
+        SupplierPaymentRepository supplierPayRepo = proxy(SupplierPaymentRepository.class, (p, m, a) -> switch (m.getName()) {
+            case "findAll" -> new PageImpl<>(List.of());
+            default -> List.of();
+        });
+        SupplierRepository supplierRepo = proxy(SupplierRepository.class, (p, m, a) -> List.of());
+        VegetableRepository vegRepo = proxy(VegetableRepository.class, (p, m, a) -> List.of());
+        StockMovementRepository movRepo = proxy(StockMovementRepository.class, (p, m, a) -> switch (m.getName()) {
+            case "findAll" -> new PageImpl<>(List.of());
+            default -> List.of();
+        });
+        PurchaseItemRepository purItemRepo = proxy(PurchaseItemRepository.class, (p, m, a) -> List.of());
+
+        BusinessOverviewService service = new BusinessOverviewService(
+                new BusinessAnalyticsService(saleRepo, saleItemRepo, orderRepo, paymentRepo, purchaseRepo, vegRepo, movRepo, FIXED_CLOCK),
+                new InventoryInsightsService(vegRepo, movRepo, orderRepo, saleItemRepo, purItemRepo, FIXED_CLOCK),
+                new SupplierService(supplierRepo, purchaseRepo, supplierPayRepo, proxy(UserRepository.class, (p, m, a) -> null)),
+                orderRepo, vegRepo, purchaseRepo, movRepo, supplierPayRepo, FIXED_CLOCK);
+
+        BusinessOverviewService.BusinessOverviewResponse res = service.overview();
+        assertEquals(1, res.recentActivity().size());
+        BusinessOverviewService.RecentActivityItem item = res.recentActivity().get(0);
+        assertEquals("PURCHASE", item.type());
+        assertEquals("Purchase #42 (Sahyadri Farms)", item.title());
+        assertEquals("COMPLETED", item.subtitle());
+        assertEquals(new BigDecimal("1250.50"), item.amount());
+        assertEquals("/staff/purchases/42", item.link());
     }
 
     private static CustomerOrderRepository.StatusSummary statusRow(OrderStatus status, long cnt, String total) {
