@@ -66,9 +66,9 @@ describe('Customer Journey QA Stage 2 — Checkout & Address', () => {
       isHydrated: true,
     })
     server.use(
-      http.get('http://localhost:8080/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
-      http.get('http://localhost:8080/api/customer/addresses', () => HttpResponse.json(SAVED_ADDRESSES)),
-      http.get('http://localhost:8080/api/my/loyalty', () => HttpResponse.json({ enabled: false, balance: 0 })),
+      http.get('*/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
+      http.get('*/api/customer/addresses', () => HttpResponse.json(SAVED_ADDRESSES)),
+      http.get('*/api/my/loyalty', () => HttpResponse.json({ enabled: false, balance: 0 })),
     )
   })
 
@@ -128,8 +128,8 @@ describe('Customer Journey QA Stage 2 — Checkout & Address', () => {
     const addrList = [...SAVED_ADDRESSES]
 
     server.use(
-      http.get('http://localhost:8080/api/customer/addresses', () => HttpResponse.json(addrList)),
-      http.post('http://localhost:8080/api/customer/addresses', async ({ request }) => {
+      http.get('*/api/customer/addresses', () => HttpResponse.json(addrList)),
+      http.post('*/api/customer/addresses', async ({ request }) => {
         const body = (await request.json()) as Record<string, string>
         const created = {
           id: 99,
@@ -144,7 +144,7 @@ describe('Customer Journey QA Stage 2 — Checkout & Address', () => {
         addrList.push(created)
         return HttpResponse.json(created, { status: 201 })
       }),
-      http.post('http://localhost:8080/api/customer/orders', async () => {
+      http.post('*/api/customer/orders', async () => {
         orderPosts += 1
         await new Promise((r) => setTimeout(r, 80))
         return HttpResponse.json({ id: 501, status: 'PLACED' }, { status: 201 })
@@ -199,7 +199,7 @@ describe('Customer Journey QA Stage 2 — Checkout & Address', () => {
 
   it('falls back safely when store-settings API fails', async () => {
     server.use(
-      http.get('http://localhost:8080/api/public/store-settings', () => HttpResponse.error()),
+      http.get('*/api/public/store-settings', () => HttpResponse.error()),
     )
     useCartStore.getState().addItem({
       vegetableId: '1',

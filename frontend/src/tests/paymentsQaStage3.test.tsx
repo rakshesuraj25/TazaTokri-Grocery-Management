@@ -87,10 +87,10 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
       isHydrated: true,
     })
     server.use(
-      http.get('http://localhost:8080/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
-      http.get('http://localhost:8080/api/customer/addresses', () => HttpResponse.json(ADDRESSES)),
-      http.get('http://localhost:8080/api/my/loyalty', () => HttpResponse.json({ enabled: false, balance: 0 })),
-      http.get('http://localhost:8080/api/public/vegetables', () => HttpResponse.json([])),
+      http.get('*/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
+      http.get('*/api/customer/addresses', () => HttpResponse.json(ADDRESSES)),
+      http.get('*/api/my/loyalty', () => HttpResponse.json({ enabled: false, balance: 0 })),
+      http.get('*/api/public/vegetables', () => HttpResponse.json([])),
     )
   })
 
@@ -100,15 +100,15 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     let paymentStartCalls = 0
 
     server.use(
-      http.post('http://localhost:8080/api/customer/orders', async ({ request }) => {
+      http.post('*/api/customer/orders', async ({ request }) => {
         const body = (await request.json()) as { paymentMethod: string }
         postedMethod = body.paymentMethod
         return HttpResponse.json(makeOrder('PLACED', 'COD'), { status: 201 })
       }),
-      http.get('http://localhost:8080/api/customer/orders/501', () =>
+      http.get('*/api/customer/orders/501', () =>
         HttpResponse.json(makeOrder('PLACED', 'COD')),
       ),
-      http.post('http://localhost:8080/api/customer/orders/501/payment', () => {
+      http.post('*/api/customer/orders/501/payment', () => {
         paymentStartCalls += 1
         return HttpResponse.json({})
       }),
@@ -154,10 +154,10 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     } as never
 
     server.use(
-      http.get('http://localhost:8080/api/customer/orders/501', () =>
+      http.get('*/api/customer/orders/501', () =>
         HttpResponse.json(makeOrder(orderStatus, 'ONLINE')),
       ),
-      http.post('http://localhost:8080/api/customer/orders/501/payment', () => {
+      http.post('*/api/customer/orders/501/payment', () => {
         startCalls += 1
         return HttpResponse.json({
           orderId: 501,
@@ -167,11 +167,11 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
           currency: 'INR',
         })
       }),
-      http.post('http://localhost:8080/api/customer/orders/501/payment/fail', () => {
+      http.post('*/api/customer/orders/501/payment/fail', () => {
         failCalls += 1
         return HttpResponse.json({ orderId: 501, status: 'PENDING_PAYMENT' })
       }),
-      http.post('http://localhost:8080/api/customer/orders/501/payment/verify', () => {
+      http.post('*/api/customer/orders/501/payment/verify', () => {
         verifyCalls += 1
         orderStatus = 'PLACED'
         return HttpResponse.json({ orderId: 501, status: 'PLACED' })
@@ -213,7 +213,7 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     await user.click(payBtn)
     await waitFor(() => expect(startCalls).toBe(4))
     server.use(
-      http.post('http://localhost:8080/api/customer/orders/501/payment/verify', () => HttpResponse.error()),
+      http.post('*/api/customer/orders/501/payment/verify', () => HttpResponse.error()),
     )
     const netErrHandler = lastOptions.handler as (res: Record<string, string>) => void
     netErrHandler({
@@ -226,7 +226,7 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
 
     // 6. Retry succeeds and verifies order
     server.use(
-      http.post('http://localhost:8080/api/customer/orders/501/payment/verify', () => {
+      http.post('*/api/customer/orders/501/payment/verify', () => {
         verifyCalls += 1
         orderStatus = 'PLACED'
         return HttpResponse.json({ orderId: 501, status: 'PLACED' })
@@ -249,12 +249,12 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     let postedMethod: string | null = null
 
     server.use(
-      http.post('http://localhost:8080/api/customer/orders', async ({ request }) => {
+      http.post('*/api/customer/orders', async ({ request }) => {
         const body = (await request.json()) as { paymentMethod: string }
         postedMethod = body.paymentMethod
         return HttpResponse.json(makeOrder('PENDING_PAYMENT', 'ONLINE'), { status: 201 })
       }),
-      http.get('http://localhost:8080/api/customer/orders/501', () =>
+      http.get('*/api/customer/orders/501', () =>
         HttpResponse.json(makeOrder('PENDING_PAYMENT', 'ONLINE')),
       ),
     )

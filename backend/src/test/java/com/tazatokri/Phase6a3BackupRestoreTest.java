@@ -26,7 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,16 @@ public class Phase6a3BackupRestoreTest {
 
     private static final Path BACKUP_DIR = Paths.get("target", "test-backups", "phase6a3").toAbsolutePath().normalize();
     private static final Path BACKUP_FILE = BACKUP_DIR.resolve("tazatokri_phase6a3_backup.sql");
+
+    @BeforeAll
+    static void initializeSourceSchema() {
+        Flyway flyway = Flyway.configure()
+                .dataSource(SOURCE_URL, USER, PASS)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(false)
+                .load();
+        flyway.migrate();
+    }
 
     @AfterAll
     static void cleanupIsolatedBackupArtifacts() throws Exception {

@@ -120,9 +120,9 @@ describe('Customer Shopping Journey QA (Stage 1)', () => {
     useCartStore.getState().clearCart()
     useAuthStore.setState({ user: null, activeRole: null, isHydrated: true })
     server.use(
-      http.get('http://localhost:8080/api/public/vegetables', () => HttpResponse.json(CATALOG)),
-      http.get('http://localhost:8080/api/public/combos', () => HttpResponse.json([])),
-      http.get('http://localhost:8080/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
+      http.get('*/api/public/vegetables', () => HttpResponse.json(CATALOG)),
+      http.get('*/api/public/combos', () => HttpResponse.json([])),
+      http.get('*/api/public/store-settings', () => HttpResponse.json(STORE_SETTINGS)),
     )
   })
 
