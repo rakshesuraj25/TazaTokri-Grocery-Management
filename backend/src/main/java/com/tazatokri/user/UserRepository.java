@@ -4,11 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import jakarta.persistence.LockModeType;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -31,7 +28,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where :role member of u.roles order by u.active desc, u.fullName asc")
     List<User> findByRole(@Param("role") Role role);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select u from User u where u.id = :id")
+    @Query(value = "SELECT * FROM users WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 }

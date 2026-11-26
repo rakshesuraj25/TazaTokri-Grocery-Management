@@ -5,11 +5,8 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import jakarta.persistence.LockModeType;
 
 public interface VegetableRepository extends JpaRepository<Vegetable, Long> {
 
@@ -26,7 +23,6 @@ public interface VegetableRepository extends JpaRepository<Vegetable, Long> {
     @EntityGraph(attributePaths = {"category", "units"})
     Optional<Vegetable> findWithDetailsById(Long id);
     
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select v from Vegetable v where v.id = :id")
+    @Query(value = "SELECT * FROM vegetables WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<Vegetable> findByIdForUpdate(@Param("id") Long id);
 }

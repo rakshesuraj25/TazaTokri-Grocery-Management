@@ -11,11 +11,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import jakarta.persistence.LockModeType;
 
 public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Long> {
 
@@ -31,8 +28,7 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
     @EntityGraph(attributePaths = {"items", "items.vegetable"})
     Optional<CustomerOrder> findWithDetailsById(Long id);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select o from CustomerOrder o where o.id = :id")
+    @Query(value = "SELECT * FROM orders WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<CustomerOrder> findByIdForUpdate(@Param("id") Long id);
 
     @EntityGraph(attributePaths = {"items", "items.vegetable"})

@@ -8,11 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import jakarta.persistence.LockModeType;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -92,17 +89,16 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<PendingCash> pendingCash();
 
     // Lock unsettled cash payments during settlement.
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-        select p
-        from Payment p
-        where p.collectedBy = :userId
-          and p.method = com.tazatokri.payment.PaymentMethod.CASH
-          and p.kind = com.tazatokri.payment.PaymentKind.COLLECTION
-          and p.status = com.tazatokri.payment.PaymentStatus.SUCCESS
-          and p.settledAt is null
-        order by p.id
-        """)
+    @Query(value = """
+        SELECT * FROM payments
+        WHERE collected_by = :userId
+          AND method = 'CASH'
+          AND kind = 'COLLECTION'
+          AND status = 'SUCCESS'
+          AND settled_at IS NULL
+        ORDER BY id
+        FOR UPDATE
+        """, nativeQuery = true)
     List<Payment> lockUnsettledCash(@Param("userId") Long userId);
 
     // Find payment using provider reference.
@@ -127,8 +123,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     );
 
     // Lock a specific payment row.
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Payment p where p.id = :id")
+    @Query(value = "SELECT * FROM payments WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<Payment> findByIdForUpdate(@Param("id") Long id);
 
     interface MethodTotal {
