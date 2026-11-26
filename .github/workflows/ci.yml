@@ -54,6 +54,18 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tazatokri_ci_root_pass
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptazatokri_ci_root_pass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,6 +76,31 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+
+      - name: Install MySQL client and initialize isolated test databases
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3307 -uroot -ptazatokri_ci_root_pass --silent; then
+              break
+            fi
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -P 3307 -uroot -ptazatokri_ci_root_pass <<'SQL'
+            CREATE DATABASE IF NOT EXISTS `tazatokri_phase6a2_test`;
+            CREATE DATABASE IF NOT EXISTS `tazatokri_phase6a3_test`;
+            CREATE DATABASE IF NOT EXISTS `tazatokri_phase6a3_restore`;
+            CREATE USER IF NOT EXISTS 'tazatokri_test'@'%' IDENTIFIED BY 'tazatokri_test_pass';
+            CREATE USER IF NOT EXISTS 'tazatokri_test'@'localhost' IDENTIFIED BY 'tazatokri_test_pass';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a2_test`.* TO 'tazatokri_test'@'%';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a3_test`.* TO 'tazatokri_test'@'%';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a3_restore`.* TO 'tazatokri_test'@'%';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a2_test`.* TO 'tazatokri_test'@'localhost';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a3_test`.* TO 'tazatokri_test'@'localhost';
+            GRANT ALL PRIVILEGES ON `tazatokri_phase6a3_restore`.* TO 'tazatokri_test'@'localhost';
+            FLUSH PRIVILEGES;
+          SQL
 
       - name: Run Maven compilation and JUnit test suites
         run: chmod +x mvnw && ./mvnw test

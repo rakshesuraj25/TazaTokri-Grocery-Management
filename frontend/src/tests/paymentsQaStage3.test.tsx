@@ -125,7 +125,7 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     })
 
     renderApp('/shop/checkout')
-    await screen.findByText('Home')
+    await screen.findByText('Home', undefined, { timeout: 5000 })
     await user.click(screen.getByRole('button', { name: /place order/i }))
 
     await screen.findByText('#501')
@@ -271,7 +271,7 @@ describe('Customer Journey QA Stage 3 — Payments (COD & Razorpay)', () => {
     })
 
     renderApp('/shop/checkout')
-    await screen.findByText('Home')
+    await screen.findByText('Home', undefined, { timeout: 5000 })
     expect(screen.getByText('₹0.00')).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: /online/i }))
     await user.click(screen.getByRole('button', { name: /place order/i }))

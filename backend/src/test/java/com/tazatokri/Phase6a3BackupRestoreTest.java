@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -53,8 +54,22 @@ public class Phase6a3BackupRestoreTest {
     private static final String RESTORE_URL = "jdbc:mysql://localhost:3307/" + RESTORE_DB
             + "?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata";
 
-    private static final Path BACKUP_DIR = Paths.get("C:/Taza_Tokri/backend/backups/phase6a3");
+    private static final Path BACKUP_DIR = Paths.get("target", "test-backups", "phase6a3").toAbsolutePath().normalize();
     private static final Path BACKUP_FILE = BACKUP_DIR.resolve("tazatokri_phase6a3_backup.sql");
+
+    @AfterAll
+    static void cleanupIsolatedBackupArtifacts() throws Exception {
+        if (Files.exists(BACKUP_FILE) && BACKUP_FILE.startsWith(BACKUP_DIR)) {
+            Files.deleteIfExists(BACKUP_FILE);
+        }
+        if (Files.isDirectory(BACKUP_DIR)) {
+            try (var entries = Files.list(BACKUP_DIR)) {
+                if (entries.findAny().isEmpty()) {
+                    Files.deleteIfExists(BACKUP_DIR);
+                }
+            }
+        }
+    }
 
     private Connection getSourceConnection() throws Exception {
         return DriverManager.getConnection(SOURCE_URL, USER, PASS);

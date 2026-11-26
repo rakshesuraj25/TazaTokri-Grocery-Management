@@ -114,7 +114,9 @@ public class Phase6a2RealMySQLIntegrationTest {
         assertNotNull(currentInfo, "Current Flyway schema migration info must not be null");
         String currentVersion = currentInfo.getVersion().getVersion();
         System.out.println("Current Schema Version:     " + currentVersion);
-        assertEquals("4", currentVersion, "Database must be migrated to schema version 4");
+        assertEquals(0, flyway.info().pending().length, "All Flyway migrations must be applied");
+        assertTrue(Integer.parseInt(currentVersion) >= 9,
+                "Database must include historical V1-V4 and latest V9 migrations, found: " + currentVersion);
 
         // Verify flyway_schema_history records
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {

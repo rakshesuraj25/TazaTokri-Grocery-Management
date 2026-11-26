@@ -174,7 +174,9 @@ public class Phase6a3RealSpringIntegrationTest {
         System.out.println("Phase 6A.3 Flyway Migrations Executed: " + res.migrationsExecuted);
         var currentInfo = flyway.info().current();
         assertNotNull(currentInfo, "Current Flyway schema info must not be null");
-        assertEquals("4", currentInfo.getVersion().getVersion(), "Database must be at schema version 4");
+        assertEquals(0, flyway.info().pending().length, "All Flyway migrations must be applied");
+        assertTrue(Integer.parseInt(currentInfo.getVersion().getVersion()) >= 9,
+                "Database must be at latest schema version (>= 9), found: " + currentInfo.getVersion().getVersion());
 
         // Verify safety preconditions
         try (Connection conn = getDirectConnection(); Statement stmt = conn.createStatement()) {
