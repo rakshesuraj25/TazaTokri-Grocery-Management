@@ -8,9 +8,14 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -203,16 +208,17 @@ public class PurchaseService {
             query = null;
         }
         final String searchTerm = query;
-        return purchases.findAllByOrderByPurchaseDateDescIdDesc(PageRequest.of(page, 50)).stream()
-                .filter(p -> supplierId == null || (p.getSupplier() != null && supplierId.equals(p.getSupplier().getId())))
-                .filter(p -> from == null || !p.getPurchaseDate().isBefore(from))
-                .filter(p -> to == null || !p.getPurchaseDate().isAfter(to))
-                .filter(p -> status == null || p.getStatus() == status)
-                .filter(p -> searchTerm == null
-                        || (p.getSupplier() != null && p.getSupplier().getName().toLowerCase(Locale.ROOT).contains(searchTerm))
-                        || (p.getInvoiceNumber() != null && p.getInvoiceNumber().toLowerCase(Locale.ROOT).contains(searchTerm))
-                        || (p.getNote() != null && p.getNote().toLowerCase(Locale.ROOT).contains(searchTerm))
-                        || p.getItems().stream().anyMatch(i -> i.getVegetable().getNameEn().toLowerCase(Locale.ROOT).contains(searchTerm)))
+        Page<Long> idPage = purchases.findFilteredIdsOrderByPurchaseDateDescIdDesc(
+                supplierId, from, to, status, searchTerm, PageRequest.of(page, 50));
+        List<Long> pageIds = idPage.getContent();
+        if (pageIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Purchase> byId = purchases.findWithDetailsByIdIn(pageIds).stream()
+                .collect(Collectors.toMap(Purchase::getId, Function.identity(), (a, b) -> a));
+        return pageIds.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
                 .map(p -> PurchaseResponse.from(p, true, safeZero(supplierPayments.sumPaidByPurchase(p.getId()))))
                 .toList();
     }

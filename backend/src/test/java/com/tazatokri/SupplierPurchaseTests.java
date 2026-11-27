@@ -3,6 +3,7 @@ package com.tazatokri;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -217,6 +219,45 @@ class SupplierPurchaseTests {
                                 }
                             }).toList();
                 }
+                case "findById" -> Optional.ofNullable(purchaseStore.get((Long) a[0]));
+                case "findFilteredIdsOrderByPurchaseDateDescIdDesc" -> {
+                    Long supId = (Long) a[0];
+                    LocalDate fromDate = (LocalDate) a[1];
+                    LocalDate toDate = (LocalDate) a[2];
+                    PurchaseStatus statusFilter = (PurchaseStatus) a[3];
+                    String term = (String) a[4];
+                    org.springframework.data.domain.Pageable pageable =
+                            (org.springframework.data.domain.Pageable) a[5];
+                    List<Long> sortedIds = purchaseStore.values().stream()
+                            .filter(pur -> supId == null || (pur.getSupplier() != null && supId.equals(pur.getSupplier().getId())))
+                            .filter(pur -> fromDate == null || !pur.getPurchaseDate().isBefore(fromDate))
+                            .filter(pur -> toDate == null || !pur.getPurchaseDate().isAfter(toDate))
+                            .filter(pur -> statusFilter == null || pur.getStatus() == statusFilter)
+                            .filter(pur -> term == null
+                                    || (pur.getSupplier() != null && pur.getSupplier().getName().toLowerCase(java.util.Locale.ROOT).contains(term))
+                                    || (pur.getInvoiceNumber() != null && pur.getInvoiceNumber().toLowerCase(java.util.Locale.ROOT).contains(term))
+                                    || (pur.getNote() != null && pur.getNote().toLowerCase(java.util.Locale.ROOT).contains(term))
+                                    || pur.getItems().stream().anyMatch(i -> i.getVegetable().getNameEn().toLowerCase(java.util.Locale.ROOT).contains(term)))
+                            .sorted(Comparator.comparing(Purchase::getPurchaseDate, Comparator.reverseOrder())
+                                    .thenComparing(Purchase::getId, Comparator.reverseOrder()))
+                            .map(Purchase::getId)
+                            .toList();
+                    int start = (int) Math.min(pageable.getOffset(), sortedIds.size());
+                    int end = Math.min(start + pageable.getPageSize(), sortedIds.size());
+                    yield new org.springframework.data.domain.PageImpl<>(
+                            sortedIds.subList(start, end), pageable, sortedIds.size());
+                }
+                case "findWithDetailsByIdIn" -> {
+                    @SuppressWarnings("unchecked")
+                    java.util.Collection<Long> ids = (java.util.Collection<Long>) a[0];
+                    // Return in ascending ID order to verify PurchaseService restores Phase 1 order
+                    yield purchaseStore.values().stream()
+                            .filter(pur -> ids.contains(pur.getId()))
+                            .sorted(Comparator.comparing(Purchase::getId))
+                            .toList();
+                }
+                case "findAllByOrderByPurchaseDateDescIdDesc" ->
+                        throw new AssertionError("PurchaseService.list must not call paginated collection EntityGraph");
                 default -> throw new UnsupportedOperationException("PurchaseRepository." + m.getName());
             });
 
@@ -497,5 +538,156 @@ class SupplierPurchaseTests {
         // Re-cancelling is rejected
         assertThrows(BadRequestException.class,
                 () -> h.purchaseService.cancel(p1.id(), "Again", h.owner.getPhone()));
+    }
+
+    @Test
+    void twoPhasePurchaseListingPreservesPaginationOrderingDetailsAndEmptyHandling() throws Exception {
+        var idPageMethod = PurchaseRepository.class.getMethod(
+                "findFilteredIdsOrderByPurchaseDateDescIdDesc",
+                Long.class, LocalDate.class, LocalDate.class, PurchaseStatus.class, String.class,
+                org.springframework.data.domain.Pageable.class);
+        assertNull(idPageMethod.getAnnotation(org.springframework.data.jpa.repository.EntityGraph.class),
+                "Phase 1 ID pagination query must not declare an EntityGraph");
+        var idQuery = idPageMethod.getAnnotation(org.springframework.data.jpa.repository.Query.class);
+        assertNotNull(idQuery, "Phase 1 ID pagination query must declare @Query");
+        assertFalse(idQuery.countQuery().isBlank(), "Phase 1 ID pagination query must declare a matching countQuery");
+
+        var detailsMethod = PurchaseRepository.class.getMethod(
+                "findWithDetailsByIdIn", java.util.Collection.class);
+        var detailsGraph = detailsMethod.getAnnotation(org.springframework.data.jpa.repository.EntityGraph.class);
+        assertNotNull(detailsGraph, "Phase 2 detail fetch must declare EntityGraph");
+        assertEquals(List.of("supplier", "items", "items.vegetable"), List.of(detailsGraph.attributePaths()));
+
+        InMemoryHarness h = new InMemoryHarness();
+
+        // Empty repository returns empty list cleanly without calling IN ()
+        assertTrue(h.purchaseService.list(0).isEmpty());
+
+        Supplier s = h.supplierService.create(new SupplierService.SupplierCreateUpdateRequest(
+                "Kisan Agro", SupplierType.FARMER, "9876500099", null, null, true));
+
+        // Create 55 purchases across two dates to span 2 pages (page size = 50)
+        LocalDate d1 = LocalDate.of(2026, 11, 20);
+        LocalDate d2 = LocalDate.of(2026, 11, 21);
+        for (int i = 1; i <= 55; i++) {
+            LocalDate date = (i <= 30) ? d1 : d2;
+            h.purchaseService.create(new PurchaseRequest(
+                    s.getId(), date, BigDecimal.ZERO, "INV-P" + i, "key-p-" + i, "Note " + i,
+                    List.of(new PurchaseItemRequest(10L, new BigDecimal("2.000"), new BigDecimal("30.00")))),
+                    h.owner.getPhone());
+        }
+
+        // Verify Page<Long> metadata directly
+        var page0Ids = h.purchaseRepo.findFilteredIdsOrderByPurchaseDateDescIdDesc(
+                null, null, null, null, null, org.springframework.data.domain.PageRequest.of(0, 50));
+        assertEquals(55L, page0Ids.getTotalElements());
+        assertEquals(2, page0Ids.getTotalPages());
+        assertEquals(0, page0Ids.getNumber());
+        assertEquals(50, page0Ids.getSize());
+
+        // Page 0: 50 purchases, newest date (d2) and highest IDs first
+        List<PurchaseResponse> page0 = h.purchaseService.list(0);
+        assertEquals(50, page0.size());
+        assertEquals(d2, page0.get(0).purchaseDate());
+        assertEquals(55L, page0.get(0).id());
+        assertEquals(54L, page0.get(1).id());
+        assertEquals("Kisan Agro", page0.get(0).supplierName());
+        assertEquals(1, page0.get(0).items().size());
+        assertEquals("Tomato", page0.get(0).items().get(0).vegetableName());
+
+        // Page 1: remaining 5 oldest purchases on d1 in ID DESC order (5, 4, 3, 2, 1)
+        List<PurchaseResponse> page1 = h.purchaseService.list(1);
+        assertEquals(5, page1.size());
+        assertEquals(d1, page1.get(0).purchaseDate());
+        assertEquals(5L, page1.get(0).id());
+        assertEquals(1L, page1.get(4).id());
+
+        // Out-of-range page returns empty list
+        assertTrue(h.purchaseService.list(2).isEmpty());
+
+        // Detail endpoint still works
+        PurchaseResponse detail = h.purchaseService.get(55L);
+        assertEquals("Kisan Agro", detail.supplierName());
+        assertEquals(1, detail.items().size());
+        assertEquals("Tomato", detail.items().get(0).vegetableName());
+    }
+
+    @Test
+    void filteredPurchasePaginationAppliesFiltersBeforePaginationAcrossMultiplePages() {
+        InMemoryHarness h = new InMemoryHarness();
+        Supplier supA = h.supplierService.create(new SupplierService.SupplierCreateUpdateRequest(
+                "Alpha Farms", SupplierType.FARMER, "9876500101", null, null, true));
+        Supplier supB = h.supplierService.create(new SupplierService.SupplierCreateUpdateRequest(
+                "Beta Mandi", SupplierType.WHOLESALE_MARKET, "9876500102", null, null, true));
+
+        LocalDate d1 = LocalDate.of(2026, 11, 18);
+        LocalDate d2 = LocalDate.of(2026, 11, 19);
+        LocalDate d3 = LocalDate.of(2026, 11, 20);
+
+        // Interleave 55 Alpha Farms purchases and 55 Beta Mandi purchases so post-pagination filtering would underfill page 0
+        Long cancelledAlphaId = null;
+        for (int i = 1; i <= 55; i++) {
+            LocalDate date = (i <= 20) ? d1 : (i <= 40 ? d2 : d3);
+            PurchaseResponse a = h.purchaseService.create(new PurchaseRequest(
+                    supA.getId(), date, BigDecimal.ZERO, "INV-A-" + i, "fa-" + i,
+                    i == 55 ? "Urgent lot" : "Regular lot",
+                    List.of(new PurchaseItemRequest(10L, new BigDecimal("1.000"), new BigDecimal("25.00")))),
+                    h.owner.getPhone());
+            if (i == 1) {
+                cancelledAlphaId = a.id();
+            }
+            h.purchaseService.create(new PurchaseRequest(
+                    supB.getId(), date, BigDecimal.ZERO, "INV-B-" + i, "fb-" + i, "Other lot",
+                    List.of(new PurchaseItemRequest(11L, new BigDecimal("1.000"), new BigDecimal("15.00")))),
+                    h.owner.getPhone());
+        }
+        h.purchaseService.cancel(cancelledAlphaId, "Duplicate", h.owner.getPhone());
+
+        // 1. Supplier filtering across multiple pages: page 0 must be full (50) and page 1 must have 5
+        var supAPage0Ids = h.purchaseRepo.findFilteredIdsOrderByPurchaseDateDescIdDesc(
+                supA.getId(), null, null, null, null, org.springframework.data.domain.PageRequest.of(0, 50));
+        assertEquals(55L, supAPage0Ids.getTotalElements());
+        assertEquals(2, supAPage0Ids.getTotalPages());
+
+        List<PurchaseResponse> supAPage0 = h.purchaseService.list(0, supA.getId(), null, null, null, null);
+        List<PurchaseResponse> supAPage1 = h.purchaseService.list(1, supA.getId(), null, null, null, null);
+        assertEquals(50, supAPage0.size());
+        assertEquals(5, supAPage1.size());
+        assertTrue(supAPage0.stream().allMatch(p -> p.supplierId().equals(supA.getId())));
+        assertTrue(supAPage1.stream().allMatch(p -> p.supplierId().equals(supA.getId())));
+        assertEquals("Alpha Farms", supAPage0.get(0).supplierName());
+        assertEquals("Tomato", supAPage0.get(0).items().get(0).vegetableName());
+
+        // 2. Date filtering across multiple pages (d2..d3 -> 35 * 2 = 70 matching purchases: page 0 = 50, page 1 = 20)
+        var datePage0Ids = h.purchaseRepo.findFilteredIdsOrderByPurchaseDateDescIdDesc(
+                null, d2, d3, null, null, org.springframework.data.domain.PageRequest.of(0, 50));
+        assertEquals(70L, datePage0Ids.getTotalElements());
+        assertEquals(2, datePage0Ids.getTotalPages());
+        List<PurchaseResponse> datePage0 = h.purchaseService.list(0, null, d2, d3, null, null);
+        List<PurchaseResponse> datePage1 = h.purchaseService.list(1, null, d2, d3, null, null);
+        assertEquals(50, datePage0.size());
+        assertEquals(20, datePage1.size());
+        assertTrue(datePage0.get(0).purchaseDate().equals(d3));
+        assertTrue(datePage1.get(datePage1.size() - 1).purchaseDate().equals(d2));
+
+        // 3. Status filtering
+        List<PurchaseResponse> cancelled = h.purchaseService.list(0, null, null, null, PurchaseStatus.CANCELLED, null);
+        assertEquals(1, cancelled.size());
+        assertEquals(cancelledAlphaId, cancelled.get(0).id());
+        assertEquals(PurchaseStatus.CANCELLED, cancelled.get(0).status());
+
+        // 4. Search filtering: by vegetable name (Onion -> 55 Beta Mandi), invoice, note, and supplier name
+        List<PurchaseResponse> onionSearch0 = h.purchaseService.list(0, null, null, null, null, "  onion ");
+        List<PurchaseResponse> onionSearch1 = h.purchaseService.list(1, null, null, null, null, "onion");
+        assertEquals(50, onionSearch0.size());
+        assertEquals(5, onionSearch1.size());
+        assertTrue(onionSearch0.stream().allMatch(p -> "Beta Mandi".equals(p.supplierName())));
+
+        List<PurchaseResponse> noteSearch = h.purchaseService.list(0, null, null, null, null, "urgent");
+        assertEquals(1, noteSearch.size());
+        assertEquals("INV-A-55", noteSearch.get(0).invoiceNumber());
+
+        // 5. Empty filtered result
+        assertTrue(h.purchaseService.list(0, null, null, null, null, "NONEXISTENT-XYZ").isEmpty());
     }
 }
